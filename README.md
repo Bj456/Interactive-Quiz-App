@@ -15,6 +15,21 @@ An advanced, real-time quiz application that uses the power of Large Language Mo
 
 ---
 
+## 📚 Table of Contents
+
+- [📸 Screenshots](#-screenshots)
+- [✅ Core Features](#-core-features)
+- [🛠️ Technologies Used](#️-technologies-used)
+- [🏁 Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [🔑 How to Get and Use an OpenRouter API Key](#-how-to-get-and-use-an-openrouter-api-key)
+- [🕹️ How to Use the App](#️-how-to-use-the-app)
+- [📜 License](#-license)
+
+---
+
+
 ## 📸 Screenshots
 
 <p align="center">
