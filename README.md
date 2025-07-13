@@ -137,7 +137,7 @@ This project is distributed under the MIT License. See the `LICENSE` file for mo
 ```
 MIT License
 
-Copyright (c) 2024 Dhruv Akbari
+Copyright (c) 2025 Dhruv Aakhali
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
