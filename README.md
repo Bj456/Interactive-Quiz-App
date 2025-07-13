@@ -10,9 +10,6 @@ An advanced, real-time quiz application that uses the power of Large Language Mo
 
 ### 🚀 [**View the Live Demo**](https://ai-interactive-quiz-generator.netlify.app/)
 
-**Note:** The live demo link provided by you was for a "Quote Generator". I have created the correct link for this quiz app. For it to work, you need to enable GitHub Pages for this repository.
-*Go to your repository -> Settings -> Pages -> Source -> Deploy from a branch -> Branch: `main` -> Folder: `/ (root)` -> Save.*
-
 ---
 
 ## 📚 Table of Contents
