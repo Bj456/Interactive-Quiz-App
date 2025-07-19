@@ -1,4 +1,4 @@
-# ✨ AI Interactive Quiz Generator
+# ✨ AI Interactive Quiz Generator 
 
 [![Repo Status](https://img.shields.io/badge/status-active-brightgreen.svg)](https://github.com/aakhalidhruv28/Interactive-Quiz-App)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
