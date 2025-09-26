@@ -1,15 +1,10 @@
 // ===================================================================================
 //
-// 🚨 DANGER: EXPOSING YOUR API KEY IN CLIENT-SIDE CODE IS A SEVERE SECURITY RISK! 🚨
-//
-// Anyone can view this code and steal your key. For a real application, this API
-// call MUST be made from a backend server where the key can be kept secret.
-// This implementation is for educational purposes only, as per the request.
+// ✅ SECURE VERSION: API calls go through Netlify Functions
+// Your API key stays hidden in Netlify Environment Variables.
+// You must create: /netlify/functions/quiz.js (as backend function)
 //
 // ===================================================================================
-
-const OPENROUTER_API_KEY = "YOUR API KEY HERE";
-const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // DOM Elements
 const loadingOverlay = document.getElementById('loading-overlay');
@@ -102,7 +97,7 @@ async function generateQuestionsWithAI() {
         The quiz must be entirely in the "${language}" language.
 
         VERY IMPORTANT: Your entire response must be ONLY a valid JSON array of objects.
-        Do not include any text, explanation, or markdown backticks like \`\`\`json.
+        Do not include any text, explanation, or markdown backticks.
 
         Each object in the array must have this exact structure:
         {
@@ -116,23 +111,16 @@ async function generateQuestionsWithAI() {
     `;
 
     try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://github.com/aakhalidhruv28/Interactive-Quiz-App', 
-                'X-Title': 'AI Interactive Quiz App'
-            },
-            body: JSON.stringify({
-                model: "meta-llama/llama-3.1-70b-instruct",
-                messages: [{ role: "user", content: prompt }]
-            })
+        // 👇 Secure call to Netlify Function (no API key exposed)
+        const response = await fetch("/.netlify/functions/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ topic, numQuestions, difficulty, language, prompt })
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
-            const errorMsg = errorData?.error?.message || `API Error: ${response.status}`;
+            const errorMsg = errorData?.error || `API Error: ${response.status}`;
             throw new Error(errorMsg);
         }
 
@@ -165,7 +153,7 @@ function showQuestion() {
 
     shuffledAnswers.forEach(answer => {
         const button = document.createElement('button');
-        button.innerHTML = `<span>${answer}</span>`; // Wrap text in span for icon placement
+        button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
         if (answer === currentQuestion.correct_answer) {
             button.dataset.correct = true;
