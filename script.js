@@ -48,9 +48,14 @@ nextBtn.addEventListener('click', handleNextButton);
 playAgainBtn.addEventListener('click', resetAndRestart);
 hintBtn.addEventListener('click', showHint);
 
-// --- Utility function for safe string comparison ---
+// --- Improved Utility function for safe string comparison (with punctuation strip) ---
 function normalize(str) {
-    return str?.trim().toLowerCase() || "";
+    if (!str) return "";
+    // Trim, lowercase, and remove common punctuation (., !, ?, A), B) etc.)
+    return str.trim().toLowerCase()
+        .replace(/[.,!?;:]/g, '')  // Remove punctuation
+        .replace(/^[a-z]\$\s*/i, '')  // Remove "A) ", "B) " prefixes
+        .replace(/^\d+\.\s*/i, '');  // Remove "1. " prefixes
 }
 
 // --- Show Screen Function (Missing Earlier) ---
@@ -79,6 +84,17 @@ async function startQuiz(e) {
     try {
         await generateQuestionsWithAI();
         if (questions && questions.length > 0) {
+            // Validate questions after generation
+            questions.forEach((q, index) => {
+                const normalizedCorrect = normalize(q.correct_answer);
+                const matchingOptions = q.answers.filter(opt => normalize(opt) === normalizedCorrect);
+                if (matchingOptions.length === 0) {
+                    console.warn(`Question ${index + 1}: No matching correct answer found! Correct: "${q.correct_answer}", Options:`, q.answers);
+                    // Fallback: Set first option as correct if no match (temporary fix)
+                    q.correct_answer = q.answers[0] || '';
+                }
+            });
+            
             currentQuestionIndex = 0;
             score = 0;
             scoreCounter.textContent = `Score: 0`;
@@ -137,16 +153,33 @@ function showQuestion() {
 
     const shuffledAnswers = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
 
+    let hasCorrect = false;
     shuffledAnswers.forEach(answer => {
         const button = document.createElement('button');
         button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
 
-        button.dataset.correct = normalize(answer) === normalize(currentQuestion.correct_answer) ? "true" : "false";
+        const isMatch = normalize(answer) === normalize(currentQuestion.correct_answer);
+        button.dataset.correct = isMatch ? "true" : "false";
+        
+        if (isMatch) hasCorrect = true;
 
         button.addEventListener('click', selectAnswer);
         answerButtonsElement.appendChild(button);
     });
+
+    // Debug log
+    console.log(`Question ${currentQuestionIndex + 1}:`, {
+        question: currentQuestion.question,
+        correct: currentQuestion.correct_answer,
+        options: currentQuestion.answers,
+        hasCorrectMatch: hasCorrect
+    });
+
+    if (!hasCorrect) {
+        console.error(`No correct option matched for question ${currentQuestionIndex + 1}! Check AI response.`);
+        showError("Warning: Question data mismatch. Check console for details.");
+    }
 
     if (quizSettings.hintsEnabled) {
         hintBtn.classList.remove('hidden');
@@ -182,11 +215,14 @@ function handleTimeUp() {
     hintBtn.classList.add('hidden');
 }
 
-// --- Select Answer ---
+// --- Select Answer (Improved: Highlight selected even if wrong) ---
 function selectAnswer(e) {
     clearInterval(timer);
     const selectedButton = e.currentTarget;
     const isCorrect = selectedButton.dataset.correct === "true";
+
+    // Visual feedback for selected button first
+    selectedButton.classList.add('selected');  // Add a 'selected' class for highlight (add CSS if needed)
 
     if (isCorrect) {
         score++;
@@ -264,4 +300,5 @@ function setStatusClass(button, isCorrect) {
         button.classList.add('incorrect');
         button.innerHTML += ' <span>✗</span>';
     }
+    // Ensure selected button gets extra style if needed (CSS में .selected { border: 2px solid blue; } ऐड करें)
 }
