@@ -89,63 +89,33 @@ async function startQuiz(e) {
 }
 
 async function generateQuestionsWithAI() {
+  try {
     const { topic, numQuestions, difficulty, language } = quizSettings;
 
-    const prompt = `
-        Generate a ${numQuestions}-question multiple-choice quiz about "${topic}".
-        Difficulty: "${difficulty}".
-        Language: "${language}".
+    const response = await fetch("/.netlify/functions/quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, numQuestions, difficulty, language })
+    });
 
-        Your ENTIRE response must ONLY be valid JSON (array of objects).
-        ❌ Do NOT include text, explanations, or markdown.
-        ✅ Just return raw JSON array like:
-        [
-          {
-            "question": "...",
-            "options": ["...", "...", "...", "..."],
-            "correctAnswer": "..."
-          }
-        ]
-    `;
-
-    try {
-        const response = await fetch("/.netlify/functions/quiz", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            const errorMsg = errorData?.error || `API Error: ${response.status}`;
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
-        let llmResponse = data.choices[0].message.content.trim();
-
-        // 🛡 Fix: Extract only JSON part if model adds extra text
-        const firstBracket = llmResponse.indexOf("[");
-        const lastBracket = llmResponse.lastIndexOf("]");
-        if (firstBracket !== -1 && lastBracket !== -1) {
-            llmResponse = llmResponse.slice(firstBracket, lastBracket + 1);
-        }
-
-        // Parse JSON safely
-        const parsedQuestions = JSON.parse(llmResponse);
-        questions = parsedQuestions.map(q => ({
-            question: q.question,
-            answers: q.options,
-            correct_answer: q.correctAnswer
-        }));
-
-    } catch (error) {
-        console.error("Error generating quiz with AI:", error);
-        questions = [];
-        throw error;
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to generate quiz");
     }
-}
 
+    const data = await response.json();
+    questions = data.questions.map(q => ({
+      question: q.question,
+      answers: q.options,
+      correct_answer: q.correctAnswer
+    }));
+
+  } catch (error) {
+    console.error("Error generating quiz with AI:", error);
+    questions = [];
+    throw error;
+  }
+}
 
 function showQuestion() {
     resetState();
