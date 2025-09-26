@@ -48,11 +48,6 @@ nextBtn.addEventListener('click', handleNextButton);
 playAgainBtn.addEventListener('click', resetAndRestart);
 hintBtn.addEventListener('click', showHint);
 
-function showScreen(screen) {
-    [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
-    screen.classList.remove('hidden');
-}
-
 // --- Utility function for safe string comparison ---
 function normalize(str) {
     return str?.trim().toLowerCase() || "";
@@ -142,10 +137,8 @@ function showQuestion() {
         button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
 
-        // ✅ Use normalized comparison for correct answer
-        if (normalize(answer) === normalize(currentQuestion.correct_answer)) {
-            button.dataset.correct = true;
-        }
+        // ✅ Correct answer stored as string "true"/"false"
+        button.dataset.correct = normalize(answer) === normalize(currentQuestion.correct_answer) ? "true" : "false";
 
         button.addEventListener('click', selectAnswer);
         answerButtonsElement.appendChild(button);
@@ -177,7 +170,8 @@ function startTimer() {
 // --- Handle Time Up ---
 function handleTimeUp() {
     Array.from(answerButtonsElement.children).forEach(button => {
-        setStatusClass(button, button.dataset.correct);
+        const correct = button.dataset.correct === "true";
+        setStatusClass(button, correct);
         button.disabled = true;
     });
     nextBtn.classList.remove('hidden');
@@ -188,8 +182,7 @@ function handleTimeUp() {
 function selectAnswer(e) {
     clearInterval(timer);
     const selectedButton = e.currentTarget;
-
-    const isCorrect = normalize(selectedButton.textContent) === normalize(questions[currentQuestionIndex].correct_answer);
+    const isCorrect = selectedButton.dataset.correct === "true";
 
     if (isCorrect) {
         score++;
@@ -197,8 +190,7 @@ function selectAnswer(e) {
     }
 
     Array.from(answerButtonsElement.children).forEach(button => {
-        // ✅ normalize dataset comparison
-        const correct = normalize(button.textContent) === normalize(questions[currentQuestionIndex].correct_answer);
+        const correct = button.dataset.correct === "true";
         setStatusClass(button, correct);
         button.disabled = true;
     });
@@ -208,7 +200,7 @@ function selectAnswer(e) {
     } else {
         setTimeout(showFinalScore, 1500); 
     }
-
+    
     hintBtn.classList.add('hidden');
 }
 
@@ -234,7 +226,7 @@ function showFinalScore() {
 
 // --- Hint ---
 function showHint() {
-    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => normalize(btn.textContent) !== normalize(questions[currentQuestionIndex].correct_answer));
+    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => btn.dataset.correct !== "true");
     if (incorrectButtons.length > 1) {
         const buttonToDisable = incorrectButtons[Math.floor(Math.random() * incorrectButtons.length)];
         buttonToDisable.style.visibility = 'hidden';
