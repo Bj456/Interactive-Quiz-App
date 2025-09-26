@@ -53,6 +53,12 @@ function normalize(str) {
     return str?.trim().toLowerCase() || "";
 }
 
+// --- Show Screen Function (Missing Earlier) ---
+function showScreen(screen) {
+    [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
+    screen.classList.remove('hidden');
+}
+
 // --- Start Quiz ---
 async function startQuiz(e) {
     e.preventDefault();
@@ -107,7 +113,6 @@ async function generateQuestionsWithAI() {
 
         const data = await response.json();
 
-        // sanitize AI response and ensure proper fields
         questions = data.questions.map(q => ({
             question: q.question || "No question text",
             answers: Array.isArray(q.options) ? q.options : [],
@@ -137,7 +142,6 @@ function showQuestion() {
         button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
 
-        // ✅ Correct answer stored as string "true"/"false"
         button.dataset.correct = normalize(answer) === normalize(currentQuestion.correct_answer) ? "true" : "false";
 
         button.addEventListener('click', selectAnswer);
