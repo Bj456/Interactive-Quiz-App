@@ -2,60 +2,51 @@
 export async function handler(event, context) {
   try {
     const { topic, numQuestions, difficulty, language } = JSON.parse(event.body);
+    const expectedCount = parseInt(numQuestions);
 
     const prompt = `
-Generate EXACTLY ${numQuestions} multiple-choice quiz questions on "${topic}".
-Difficulty: ${difficulty}. Language: ${language}.
+Generate EXACTLY ${expectedCount} MCQ quiz questions on "${topic}". Difficulty: ${difficulty}. Language: ${language}.
 
-STRICT RULES:
-- JSON array ONLY. No extra text.
-- Each object: "question" (string), "options" (array of 4 plain strings, no prefixes/punctuation), "correctAnswer" (exactly one option string).
-- Shuffle options. 1 correct + 3 distractors.
-- Example: [{"question":"What is the third planet?","options":["Mars","Venus","Earth","Jupiter"],"correctAnswer":"Earth"}]
+RULES:
+- ONLY valid JSON array. Start with [, end with ]. No extra text.
+- Each: {"question": "...", "options": ["opt1", "opt2", "opt3", "opt4"] (plain, no A/B, no .), "correctAnswer": "exact one opt"}
+- Shuffle options. Complete ALL questions fully.
 
-Output ONLY the JSON array.
+Example: [{"question":"Capital of India?","options":["Mumbai","Delhi","Kolkata","Chennai"],"correctAnswer":"Delhi"}]
+
+Output ONLY the JSON array. Ensure it ends with ].
 `;
 
-    // Function to call AI with given tokens
-    const callAI = async (tokens) => {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "meta-llama/llama-3.1-70b-instruct",  // Or "openai/gpt-4o-mini" for better handling
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-          max_tokens: tokens  // Dynamic: Start with 4096, retry with 8192
-        })
-      });
+    // Models to try (Llama first, fallback to GPT for better structure)
+    const models = [
+      "meta-llama/llama-3.1-70b-instruct",
+      "openai/gpt-4o-mini"  // Better at JSON; switch if Llama fails often
+    ];
 
-      if (!res.ok) {
-        throw new Error(`API request failed: ${res.status} - ${res.statusText}`);
+    let questions = null;
+    let retryCount = 0;
+    const maxRetries = 2;
+
+    while (!questions && retryCount < maxRetries) {
+      const model = models[retryCount];  // Switch model on retry
+      const maxTokens = retryCount === 0 ? 8192 : 16384;  // Higher on retry
+
+      const llmResponse = await callAI(prompt, model, maxTokens);
+      console.log(`Attempt ${retryCount + 1} with ${model}, tokens: ${maxTokens}. Response length: ${llmResponse.length}`);
+
+      questions = await extractAndValidateJSON(llmResponse, expectedCount);
+
+      if (!questions || questions.length === 0) {
+        console.warn(`Attempt ${retryCount + 1} failed. Retrying...`);
+        retryCount++;
       }
-
-      const data = await res.json();
-      return data.choices[0]?.message?.content || "";
-    };
-
-    // First attempt
-    let llmResponse = await callAI(4096);
-    let questions = await extractAndValidateJSON(llmResponse, numQuestions);
-
-    // Retry if invalid (e.g., truncated)
-    if (!questions || questions.length < parseInt(numQuestions)) {
-      console.warn("First AI call incomplete. Retrying with higher tokens...");
-      llmResponse = await callAI(8192);  // Higher limit for retry
-      questions = await extractAndValidateJSON(llmResponse, numQuestions);
     }
 
     if (!questions || questions.length === 0) {
-      throw new Error("Failed to generate valid questions after retry. Response preview: " + llmResponse.substring(0, 300));
+      throw new Error(`Failed after ${maxRetries} retries. Last response preview: ${llmResponse.substring(0, 500)}`);
     }
 
-    console.log(`Successfully generated ${questions.length} questions for topic: ${topic}`);
+    console.log(`Success: ${questions.length} valid questions generated for "${topic}"`);
 
     return {
       statusCode: 200,
@@ -72,60 +63,104 @@ Output ONLY the JSON array.
   }
 }
 
-// Helper: Extract and validate JSON from LLM response
-async function extractAndValidateJSON(llmResponse, expectedCount) {
-  // Improved regex: Match complete outermost array (greedy for full content)
-  const jsonMatch = llmResponse.match(/\$[\s\S]*\$/);  // Greedy to capture full array if possible
-  if (!jsonMatch) {
-    throw new Error("No JSON array found in response. Full preview: " + llmResponse.substring(0, 300));
+// Helper: Call AI API
+async function callAI(prompt, model, maxTokens) {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: maxTokens
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error(`API failed: ${res.status} - ${res.statusText}`);
   }
 
-  const jsonString = jsonMatch[0];
-  console.log("Extracted JSON length:", jsonString.length);  // Debug: Check if truncated
+  const data = await res.json();
+  return data.choices[0]?.message?.content || "";
+}
+
+// Helper: Robust JSON Extraction & Partial Parsing
+async function extractAndValidateJSON(llmResponse, expectedCount) {
+  console.log("Full response preview:", llmResponse.substring(0, 500) + (llmResponse.length > 500 ? "..." : ""));
+
+  // Find start of array
+  const startIndex = llmResponse.indexOf('[');
+  if (startIndex === -1) {
+    throw new Error("No opening [ found. Response preview: " + llmResponse.substring(0, 300));
+  }
+
+  // Take from [ to end (for truncated cases)
+  let jsonString = llmResponse.substring(startIndex);
+
+  // If has closing ], use greedy match for safety
+  const endIndex = llmResponse.lastIndexOf(']');
+  if (endIndex > startIndex) {
+    jsonString = llmResponse.substring(startIndex, endIndex + 1);
+  } else {
+    console.warn("No closing ] found - using partial response from [ to end");
+    // Add closing ] if missing (hack for truncation)
+    if (!jsonString.endsWith(']')) {
+      jsonString += ']';
+    }
+  }
+
+  console.log("Extracted JSON preview:", jsonString.substring(0, 300) + (jsonString.length > 300 ? "..." : ""));
 
   try {
-    const questions = JSON.parse(jsonString);
-    if (!Array.isArray(questions) || questions.length === 0) {
-      throw new Error(`Parsed empty or invalid array. Length: ${questions?.length || 0}`);
+    const parsed = JSON.parse(jsonString);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Parsed content is not an array");
     }
 
-    // Validate each question
-    let validCount = 0;
+    // Validate and extract valid questions (handle partial array)
     const validatedQuestions = [];
-    questions.forEach((q, i) => {
-      if (q.question && Array.isArray(q.options) && q.options.length === 4 && q.correctAnswer) {
-        // Check exact match (trimmed)
+    parsed.forEach((q, i) => {
+      if (q && q.question && Array.isArray(q.options) && q.options.length === 4 && q.correctAnswer) {
         const trimmedCorrect = q.correctAnswer.trim();
-        const hasMatch = q.options.some(opt => opt.trim() === trimmedCorrect);
-        if (hasMatch) {
+        const cleanedOptions = q.options.map(opt => opt.trim());
+        const hasExactMatch = cleanedOptions.includes(trimmedCorrect);
+
+        if (hasExactMatch) {
           validatedQuestions.push({
             question: q.question.trim(),
-            options: q.options.map(opt => opt.trim()),  // Clean options
+            options: cleanedOptions,
             correctAnswer: trimmedCorrect
           });
-          validCount++;
+          console.log(`Valid question ${i+1}: "${trimmedCorrect}" matches options`);
         } else {
-          console.warn(`Question ${i+1} skipped: correctAnswer "${q.correctAnswer}" no exact match in options`, q.options);
+          console.warn(`Question ${i+1} no match: "${trimmedCorrect}" not in [${cleanedOptions.join(', ')}]`);
         }
       } else {
-        console.warn(`Question ${i+1} invalid structure:`, q);
+        console.warn(`Question ${i+1} invalid: Missing fields in`, q);
       }
     });
 
-    if (validatedQuestions.length < expectedCount) {
-      console.warn(`Only ${validatedQuestions.length} valid questions out of ${questions.length} parsed.`);
+    const validCount = validatedQuestions.length;
+    if (validCount === 0) {
+      throw new Error(`No valid questions parsed. Parsed ${parsed.length} items, but all invalid.`);
     }
 
-    // If partial but some valid, return them (better than nothing)
-    return validatedQuestions.length > 0 ? validatedQuestions : null;
+    if (validCount < expectedCount) {
+      console.warn(`Partial success: ${validCount}/${expectedCount} valid questions (likely truncation).`);
+    }
+
+    return validatedQuestions;
 
   } catch (parseErr) {
-    // Check if likely truncated (e.g., no closing ] or mid-object)
-    const isTruncated = jsonString.includes("What is the p") || !jsonString.endsWith(']') || jsonString.match(/,\s*\{/g)?.length !== jsonString.match(/\{\s*"/g)?.length;
-    if (isTruncated) {
-      throw new Error(`JSON parse failed - likely truncated response (tokens exceeded). Error: ${parseErr.message}. Preview: ${jsonString.substring(0, 200)}...`);
-    } else {
-      throw new Error(`JSON parse failed: ${parseErr.message}. Raw JSON: ${jsonString.substring(0, 300)}`);
-    }
+    // Detect truncation patterns
+    const isTruncated = jsonString.includes('"correctAnswer": "') && !jsonString.includes(', "correctAnswer"') || 
+                        jsonString.endsWith('"') || jsonString.endsWith(' ');
+
+    const errorMsg = `JSON parse failed: ${parseErr.message}. Likely ${isTruncated ? 'truncated' : 'malformed'}. JSON: ${jsonString.substring(0, 400)}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 }
