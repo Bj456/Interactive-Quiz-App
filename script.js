@@ -48,23 +48,23 @@ nextBtn.addEventListener('click', handleNextButton);
 playAgainBtn.addEventListener('click', resetAndRestart);
 hintBtn.addEventListener('click', showHint);
 
-// --- Improved Utility function for safe string comparison (with punctuation strip) ---
+// --- Improved Utility function for safe string comparison (enhanced cleaning) ---
 function normalize(str) {
     if (!str) return "";
-    // Trim, lowercase, and remove common punctuation (., !, ?, A), B) etc.)
     return str.trim().toLowerCase()
-        .replace(/[.,!?;:]/g, '')  // Remove punctuation
-        .replace(/^[a-z]\$\s*/i, '')  // Remove "A) ", "B) " prefixes
-        .replace(/^\d+\.\s*/i, '');  // Remove "1. " prefixes
+        .replace(/[.,!?;:()]/g, '')  // Remove punctuation including ()
+        .replace(/^[a-z0-9]\$\s*/i, '')  // Remove "A) ", "1. " prefixes
+        .replace(/^\d+\.\s*/i, '')  // Remove numbered prefixes
+        .replace(/\b(the|a|an)\b\s*/gi, '');  // Optional: Remove common articles if needed
 }
 
-// --- Show Screen Function (Missing Earlier) ---
+// --- Show Screen Function ---
 function showScreen(screen) {
     [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
     screen.classList.remove('hidden');
 }
 
-// --- Start Quiz ---
+// --- Start Quiz (Improved Validation - No Fallback, Filter Invalid Questions) ---
 async function startQuiz(e) {
     e.preventDefault();
     errorMessage.classList.add('hidden');
@@ -83,28 +83,45 @@ async function startQuiz(e) {
 
     try {
         await generateQuestionsWithAI();
-        if (questions && questions.length > 0) {
-            // Validate questions after generation
-            questions.forEach((q, index) => {
-                const normalizedCorrect = normalize(q.correct_answer);
-                const matchingOptions = q.answers.filter(opt => normalize(opt) === normalizedCorrect);
-                if (matchingOptions.length === 0) {
-                    console.warn(`Question ${index + 1}: No matching correct answer found! Correct: "${q.correct_answer}", Options:`, q.answers);
-                    // Fallback: Set first option as correct if no match (temporary fix)
-                    q.correct_answer = q.answers[0] || '';
-                }
-            });
-            
-            currentQuestionIndex = 0;
-            score = 0;
-            scoreCounter.textContent = `Score: 0`;
-            showScreen(quizScreen);
-            showQuestion();
-        } else {
-            throw new Error("The AI did not return any questions. Please try a different topic or settings.");
+        
+        // Validate and filter valid questions only
+        const validQuestions = [];
+        let invalidCount = 0;
+        questions.forEach((q, index) => {
+            const normalizedCorrect = normalize(q.correct_answer);
+            const matchingOptions = q.answers.filter(opt => normalize(opt) === normalizedCorrect);
+            if (matchingOptions.length > 0 && q.answers.length >= 2) {  // At least 2 options and match found
+                validQuestions.push(q);
+            } else {
+                console.warn(`Question ${index + 1} skipped (invalid): Correct: "${q.correct_answer}", Normalized: "${normalizedCorrect}", Options:`, q.answers.map(opt => `"${normalize(opt)}"`));
+                invalidCount++;
+            }
+        });
+
+        questions = validQuestions;
+
+        if (questions.length === 0) {
+            throw new Error(`No valid questions generated. AI response had mismatches (invalid: ${invalidCount}). Try different topic/settings or check backend prompt.`);
+        } else if (invalidCount > 0) {
+            console.warn(`${invalidCount} questions skipped due to data mismatch.`);
+            showError(`Warning: ${invalidCount} questions skipped due to AI data issues. Only ${questions.length} valid questions loaded.`);
         }
+
+        currentQuestionIndex = 0;
+        score = 0;
+        scoreCounter.textContent = `Score: 0`;
+        showScreen(quizScreen);
+        showQuestion();
     } catch (error) {
         showError(error.message);
+        // Optional: Retry generation if no questions
+        if (error.message.includes("No valid questions")) {
+            setTimeout(() => {
+                if (confirm("No valid quiz generated. Retry with same settings?")) {
+                    startQuiz(e);
+                }
+            }, 1000);
+        }
     } finally {
         loadingOverlay.classList.add('hidden');
         startBtn.disabled = false;
@@ -132,7 +149,7 @@ async function generateQuestionsWithAI() {
         questions = data.questions.map(q => ({
             question: q.question || "No question text",
             answers: Array.isArray(q.options) ? q.options : [],
-            correct_answer: q.correctAnswer || ""
+            correct_answer: q.correctAnswer || q.correct_answer || ""  // Try both field names
         }));
 
     } catch (error) {
@@ -142,7 +159,7 @@ async function generateQuestionsWithAI() {
     }
 }
 
-// --- Show Question ---
+// --- Show Question (Extra Safety Check) ---
 function showQuestion() {
     resetState();
     const currentQuestion = questions[currentQuestionIndex];
@@ -168,17 +185,20 @@ function showQuestion() {
         answerButtonsElement.appendChild(button);
     });
 
-    // Debug log
+    // Debug log (remove in production)
     console.log(`Question ${currentQuestionIndex + 1}:`, {
         question: currentQuestion.question,
         correct: currentQuestion.correct_answer,
-        options: currentQuestion.answers,
+        normalizedCorrect: normalize(currentQuestion.correct_answer),
+        options: currentQuestion.answers.map(opt => ({ raw: opt, normalized: normalize(opt) })),
         hasCorrectMatch: hasCorrect
     });
 
     if (!hasCorrect) {
-        console.error(`No correct option matched for question ${currentQuestionIndex + 1}! Check AI response.`);
-        showError("Warning: Question data mismatch. Check console for details.");
+        console.error(`CRITICAL: No correct option matched for question ${currentQuestionIndex + 1}! Skipping to next.`);
+        alert(`Question ${currentQuestionIndex + 1} has data error. Skipping...`);  // Temporary alert
+        handleNextButton();  // Skip to next
+        return;
     }
 
     if (quizSettings.hintsEnabled) {
@@ -215,14 +235,11 @@ function handleTimeUp() {
     hintBtn.classList.add('hidden');
 }
 
-// --- Select Answer (Improved: Highlight selected even if wrong) ---
+// --- Select Answer ---
 function selectAnswer(e) {
     clearInterval(timer);
     const selectedButton = e.currentTarget;
     const isCorrect = selectedButton.dataset.correct === "true";
-
-    // Visual feedback for selected button first
-    selectedButton.classList.add('selected');  // Add a 'selected' class for highlight (add CSS if needed)
 
     if (isCorrect) {
         score++;
@@ -247,7 +264,11 @@ function selectAnswer(e) {
 // --- Next Button ---
 function handleNextButton() {
     currentQuestionIndex++;
-    showQuestion();
+    if (currentQuestionIndex < questions.length) {
+        showQuestion();
+    } else {
+        showFinalScore();
+    }
 }
 
 // --- Show Final Score ---
@@ -300,5 +321,4 @@ function setStatusClass(button, isCorrect) {
         button.classList.add('incorrect');
         button.innerHTML += ' <span>✗</span>';
     }
-    // Ensure selected button gets extra style if needed (CSS में .selected { border: 2px solid blue; } ऐड करें)
 }
