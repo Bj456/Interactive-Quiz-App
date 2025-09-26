@@ -93,29 +93,26 @@ async function generateQuestionsWithAI() {
 
     const prompt = `
         Generate a ${numQuestions}-question multiple-choice quiz about "${topic}".
-        The difficulty level must be "${difficulty}".
-        The quiz must be entirely in the "${language}" language.
+        Difficulty: "${difficulty}".
+        Language: "${language}".
 
-        VERY IMPORTANT: Your entire response must be ONLY a valid JSON array of objects.
-        Do not include any text, explanation, or markdown backticks.
-
-        Each object in the array must have this exact structure:
-        {
-          "question": "The question text in ${language}",
-          "options": ["An incorrect option", "Another incorrect option", "The correct option", "A third incorrect option"],
-          "correctAnswer": "The exact text of the correct option"
-        }
-
-        Ensure the "correctAnswer" value is always one of the strings present in the "options" array.
-        Shuffle the position of the correct answer within the "options" array for each question.
+        Your ENTIRE response must ONLY be valid JSON (array of objects).
+        ❌ Do NOT include text, explanations, or markdown.
+        ✅ Just return raw JSON array like:
+        [
+          {
+            "question": "...",
+            "options": ["...", "...", "...", "..."],
+            "correctAnswer": "..."
+          }
+        ]
     `;
 
     try {
-        // 👇 Secure call to Netlify Function (no API key exposed)
         const response = await fetch("/.netlify/functions/quiz", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ topic, numQuestions, difficulty, language, prompt })
+            body: JSON.stringify({ prompt })
         });
 
         if (!response.ok) {
@@ -125,8 +122,16 @@ async function generateQuestionsWithAI() {
         }
 
         const data = await response.json();
-        const llmResponse = data.choices[0].message.content;
-        
+        let llmResponse = data.choices[0].message.content.trim();
+
+        // 🛡 Fix: Extract only JSON part if model adds extra text
+        const firstBracket = llmResponse.indexOf("[");
+        const lastBracket = llmResponse.lastIndexOf("]");
+        if (firstBracket !== -1 && lastBracket !== -1) {
+            llmResponse = llmResponse.slice(firstBracket, lastBracket + 1);
+        }
+
+        // Parse JSON safely
         const parsedQuestions = JSON.parse(llmResponse);
         questions = parsedQuestions.map(q => ({
             question: q.question,
@@ -137,9 +142,10 @@ async function generateQuestionsWithAI() {
     } catch (error) {
         console.error("Error generating quiz with AI:", error);
         questions = [];
-        throw error; // Re-throw the error to be caught by startQuiz
+        throw error;
     }
 }
+
 
 function showQuestion() {
     resetState();
