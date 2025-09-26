@@ -2,7 +2,7 @@
 //
 // ✅ SECURE VERSION: API calls go through Netlify Functions
 // Your API key stays hidden in Netlify Environment Variables.
-// You must create: /netlify/functions/quiz.js (as backend function)
+// Developed by Teacher Bhaskar Joshi
 //
 // ===================================================================================
 
@@ -53,9 +53,14 @@ function showScreen(screen) {
     screen.classList.remove('hidden');
 }
 
+// normalize function for safe string comparison
+function normalize(str) {
+    return str?.trim().toLowerCase() || "";
+}
+
 async function startQuiz(e) {
     e.preventDefault();
-    errorMessage.classList.add('hidden'); // Hide any previous errors
+    errorMessage.classList.add('hidden'); 
     
     quizSettings = {
         topic: topicInput.value,
@@ -104,10 +109,12 @@ async function generateQuestionsWithAI() {
     }
 
     const data = await response.json();
+
+    // sanitize AI response and ensure proper fields
     questions = data.questions.map(q => ({
-      question: q.question,
-      answers: q.options,
-      correct_answer: q.correctAnswer
+      question: q.question || "No question text",
+      answers: Array.isArray(q.options) ? q.options : [],
+      correct_answer: q.correctAnswer || ""
     }));
 
   } catch (error) {
@@ -121,7 +128,7 @@ function showQuestion() {
     resetState();
     const currentQuestion = questions[currentQuestionIndex];
     
-    questionElement.textContent = currentQuestion.question; 
+    questionElement.textContent = currentQuestion.question || "No question available"; 
     questionCounter.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
     progressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
 
@@ -131,7 +138,7 @@ function showQuestion() {
         const button = document.createElement('button');
         button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
-        if (answer === currentQuestion.correct_answer) {
+        if (normalize(answer) === normalize(currentQuestion.correct_answer)) {
             button.dataset.correct = true;
         }
         button.addEventListener('click', selectAnswer);
@@ -172,7 +179,7 @@ function handleTimeUp() {
 function selectAnswer(e) {
     clearInterval(timer);
     const selectedButton = e.currentTarget;
-    const isCorrect = selectedButton.dataset.correct === 'true';
+    const isCorrect = normalize(selectedButton.textContent) === normalize(questions[currentQuestionIndex].correct_answer);
 
     if (isCorrect) {
         score++;
@@ -237,7 +244,7 @@ function resetState() {
 }
 
 function setStatusClass(button, isCorrect) {
-    if (isCorrect) {
+    if (isCorrect === 'true') {
         button.classList.add('correct');
         button.innerHTML += ' <span>✓</span>';
     } else {
