@@ -53,15 +53,16 @@ function showScreen(screen) {
     screen.classList.remove('hidden');
 }
 
-// normalize function for safe string comparison
+// --- Utility function for safe string comparison ---
 function normalize(str) {
     return str?.trim().toLowerCase() || "";
 }
 
+// --- Start Quiz ---
 async function startQuiz(e) {
     e.preventDefault();
-    errorMessage.classList.add('hidden'); 
-    
+    errorMessage.classList.add('hidden');
+
     quizSettings = {
         topic: topicInput.value,
         numQuestions: numQuestionsInput.value,
@@ -70,7 +71,7 @@ async function startQuiz(e) {
         timerDuration: parseInt(timerDurationInput.value, 10),
         hintsEnabled: document.querySelector('input[name="hint-option"]:checked').value === 'enable'
     };
-    
+
     loadingOverlay.classList.remove('hidden');
     startBtn.disabled = true;
 
@@ -93,41 +94,43 @@ async function startQuiz(e) {
     }
 }
 
+// --- Generate Questions from AI (Netlify Function) ---
 async function generateQuestionsWithAI() {
-  try {
-    const { topic, numQuestions, difficulty, language } = quizSettings;
+    try {
+        const { topic, numQuestions, difficulty, language } = quizSettings;
 
-    const response = await fetch("/.netlify/functions/quiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, numQuestions, difficulty, language })
-    });
+        const response = await fetch("/.netlify/functions/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ topic, numQuestions, difficulty, language })
+        });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || "Failed to generate quiz");
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || "Failed to generate quiz");
+        }
+
+        const data = await response.json();
+
+        // sanitize AI response and ensure proper fields
+        questions = data.questions.map(q => ({
+            question: q.question || "No question text",
+            answers: Array.isArray(q.options) ? q.options : [],
+            correct_answer: q.correctAnswer || ""
+        }));
+
+    } catch (error) {
+        console.error("Error generating quiz with AI:", error);
+        questions = [];
+        throw error;
     }
-
-    const data = await response.json();
-
-    // sanitize AI response and ensure proper fields
-    questions = data.questions.map(q => ({
-      question: q.question || "No question text",
-      answers: Array.isArray(q.options) ? q.options : [],
-      correct_answer: q.correctAnswer || ""
-    }));
-
-  } catch (error) {
-    console.error("Error generating quiz with AI:", error);
-    questions = [];
-    throw error;
-  }
 }
 
+// --- Show Question ---
 function showQuestion() {
     resetState();
     const currentQuestion = questions[currentQuestionIndex];
-    
+
     questionElement.textContent = currentQuestion.question || "No question available"; 
     questionCounter.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
     progressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
@@ -138,9 +141,12 @@ function showQuestion() {
         const button = document.createElement('button');
         button.innerHTML = `<span>${answer}</span>`;
         button.classList.add('btn');
+
+        // ✅ Use normalized comparison for correct answer
         if (normalize(answer) === normalize(currentQuestion.correct_answer)) {
             button.dataset.correct = true;
         }
+
         button.addEventListener('click', selectAnswer);
         answerButtonsElement.appendChild(button);
     });
@@ -153,6 +159,7 @@ function showQuestion() {
     startTimer();
 }
 
+// --- Timer ---
 function startTimer() {
     timeLeft = quizSettings.timerDuration;
     timerDisplay.textContent = `Time: ${timeLeft}`;
@@ -167,6 +174,7 @@ function startTimer() {
     }, 1000);
 }
 
+// --- Handle Time Up ---
 function handleTimeUp() {
     Array.from(answerButtonsElement.children).forEach(button => {
         setStatusClass(button, button.dataset.correct);
@@ -176,9 +184,11 @@ function handleTimeUp() {
     hintBtn.classList.add('hidden');
 }
 
+// --- Select Answer ---
 function selectAnswer(e) {
     clearInterval(timer);
     const selectedButton = e.currentTarget;
+
     const isCorrect = normalize(selectedButton.textContent) === normalize(questions[currentQuestionIndex].correct_answer);
 
     if (isCorrect) {
@@ -187,7 +197,9 @@ function selectAnswer(e) {
     }
 
     Array.from(answerButtonsElement.children).forEach(button => {
-        setStatusClass(button, button.dataset.correct);
+        // ✅ normalize dataset comparison
+        const correct = normalize(button.textContent) === normalize(questions[currentQuestionIndex].correct_answer);
+        setStatusClass(button, correct);
         button.disabled = true;
     });
 
@@ -196,15 +208,17 @@ function selectAnswer(e) {
     } else {
         setTimeout(showFinalScore, 1500); 
     }
-    
+
     hintBtn.classList.add('hidden');
 }
 
+// --- Next Button ---
 function handleNextButton() {
     currentQuestionIndex++;
     showQuestion();
 }
 
+// --- Show Final Score ---
 function showFinalScore() {
     showScreen(scoreScreen);
     const scorePercent = Math.round((score / questions.length) * 100);
@@ -218,8 +232,9 @@ function showFinalScore() {
     scoreFeedbackElement.textContent = feedback;
 }
 
+// --- Hint ---
 function showHint() {
-    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => !btn.dataset.correct);
+    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => normalize(btn.textContent) !== normalize(questions[currentQuestionIndex].correct_answer));
     if (incorrectButtons.length > 1) {
         const buttonToDisable = incorrectButtons[Math.floor(Math.random() * incorrectButtons.length)];
         buttonToDisable.style.visibility = 'hidden';
@@ -227,10 +242,12 @@ function showHint() {
     }
 }
 
+// --- Reset & Restart ---
 function resetAndRestart() {
     showScreen(startScreen);
 }
 
+// --- Show Error ---
 function showError(message) {
     errorMessage.textContent = `⚠️ Error: ${message}`;
     errorMessage.classList.remove('hidden');
@@ -244,7 +261,7 @@ function resetState() {
 }
 
 function setStatusClass(button, isCorrect) {
-    if (isCorrect === 'true') {
+    if (isCorrect) {
         button.classList.add('correct');
         button.innerHTML += ' <span>✓</span>';
     } else {
