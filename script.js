@@ -151,6 +151,9 @@ async function generateQuestionsWithAI() {
             answers: Array.isArray(q.options) ? q.options : [],
             correct_answer: q.correctAnswer || q.correct_answer || ""  // Try both field names
         }));
+        // Make questions globally accessible for PDF generation
+window.questions = questions;
+
 
     } catch (error) {
         console.error("Error generating quiz with AI:", error);
