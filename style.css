@@ -150,10 +150,25 @@ input[type="radio"] { accent-color: var(--primary-color); }
 }
 
 /* --- Footer --- */
-footer { text-align: center; color: var(--text-secondary); margin-top: 40px; }
-footer p { margin-bottom: 5px; }
-footer a { color: var(--primary-light); text-decoration: none; font-weight: 600; }
-footer a:hover { text-decoration: underline; }
+footer { 
+    text-align: center; 
+    color: var(--text-secondary); 
+    margin-top: 40px; 
+}
+footer p { 
+    margin-bottom: 5px; 
+    color: #000000;   /* Pure Black for your name */
+    font-weight: 600; /* थोड़ा bold ताकि clear दिखे */
+}
+footer a { 
+    color: var(--primary-light); 
+    text-decoration: none; 
+    font-weight: 600; 
+}
+footer a:hover { 
+    text-decoration: underline; 
+}
+
 
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
