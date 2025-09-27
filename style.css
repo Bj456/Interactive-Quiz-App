@@ -33,18 +33,19 @@ body {
 }
 
 .container {
-    background-color: rgba(30, 30, 30, 0.9);
+    background-color: #fff5f8; /* हल्का pinkish white */
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--border-color);
     border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); /* हल्का shadow */
     width: 100%;
     max-width: 750px;
     padding: 40px;
     overflow: hidden;
     transition: all 0.3s ease;
 }
+
 
 .screen {
     display: none;
