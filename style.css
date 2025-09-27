@@ -1,15 +1,16 @@
 :root {
-    --primary-color: #8A2BE2; /* BlueViolet */
-    --primary-light: #9932CC; /* DarkOrchid */
-    --secondary-color: #4B0082; /* Indigo */
-    --correct-color: #28a745;
-    --incorrect-color: #dc3545;
-    --bg-dark: #121212;
-    --bg-light: #1e1e1e;
-    --text-primary: #ffffff;
-    --text-secondary: #b3b3b3;
-    --border-color: #333;
+    --primary-color: #E91E63;   /* Pink */
+    --primary-light: #F06292;   /* Light Pink */
+    --secondary-color: #AD1457; /* Dark Pink */
+    --correct-color: #4CAF50;   /* Green for correct */
+    --incorrect-color: #F44336; /* Red for incorrect */
+    --bg-dark: #2c0a18;         /* Very Dark Pinkish */
+    --bg-light: #3f1a28;        /* Darker Rose */
+    --text-primary: #ffffff;    
+    --text-secondary: #f8bbd0;  /* Soft Pink */
+    --border-color: #6a1b3a;    /* Border Dark Rose */
 }
+
 
 * {
     box-sizing: border-box;
