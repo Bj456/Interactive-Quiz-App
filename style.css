@@ -152,20 +152,24 @@ input[type="radio"] { accent-color: var(--primary-color); }
 /* --- Footer --- */
 footer { 
     text-align: center; 
-    color: var(--text-secondary); 
+    color: #000000;   /* पूरी footer text black */
     margin-top: 40px; 
+    font-weight: 600;
 }
+
 footer p { 
     margin-bottom: 5px; 
-    color: #000000;   /* Pure Black for your name */
-    font-weight: 600; /* थोड़ा bold ताकि clear दिखे */
+    /* color inherit होगा #000000 से */
 }
+
 footer a { 
-    color: var(--primary-light); 
+    color: #000000;  /* links भी black, अगर चाहते हो */
     text-decoration: none; 
     font-weight: 600; 
 }
+
 footer a:hover { 
+    color: var(--primary-light); /* hover में pink दिखे */
     text-decoration: underline; 
 }
 
