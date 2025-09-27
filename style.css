@@ -1,15 +1,16 @@
 :root {
-    --primary-color: #E91E63;   /* Pink */
-    --primary-light: #F06292;   /* Light Pink */
-    --secondary-color: #AD1457; /* Dark Pink */
-    --correct-color: #4CAF50;   /* Green for correct */
-    --incorrect-color: #F44336; /* Red for incorrect */
-    --bg-dark: #2c0a18;         /* Very Dark Pinkish */
-    --bg-light: #3f1a28;        /* Darker Rose */
-    --text-primary: #ffffff;    
-    --text-secondary: #f8bbd0;  /* Soft Pink */
-    --border-color: #6a1b3a;    /* Border Dark Rose */
+    --primary-color: #FF80AB;   /* Light Pink */
+    --primary-light: #FFB6C1;   /* Soft Baby Pink */
+    --secondary-color: #F48FB1; /* Medium Pink */
+    --correct-color: #4CAF50;   /* Green */
+    --incorrect-color: #E57373; /* Soft Red */
+    --bg-dark: #fff0f5;         /* Lavender Blush (very light pinkish) */
+    --bg-light: #ffe4ec;        /* Soft Pink Background */
+    --text-primary: #333333;    /* Dark text for readability */
+    --text-secondary: #777777;  /* Soft gray for secondary text */
+    --border-color: #f8bbd0;    /* Border soft pink */
 }
+
 
 
 * {
