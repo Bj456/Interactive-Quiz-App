@@ -4,8 +4,15 @@ export async function handler(event, context) {
     const { topic, numQuestions, difficulty, language } = JSON.parse(event.body);
     const expectedCount = parseInt(numQuestions);
 
+    // Language-specific prompt modification
+    let langInstruction = "";
+    if (language === "Kumaoni") {
+      langInstruction = "Respond STRICTLY in Kumaoni language, using the local Kumaoni style and words. Avoid Hindi or English.";
+    }
+
     const prompt = `
 Generate EXACTLY ${expectedCount} MCQ quiz questions on "${topic}". Difficulty: ${difficulty}. Language: ${language}.
+${langInstruction}
 
 RULES:
 - ONLY valid JSON array. Start with [, end with ]. No extra text.
@@ -17,21 +24,21 @@ Example: [{"question":"Capital of India?","options":["Mumbai","Delhi","Kolkata",
 Output ONLY the JSON array. Ensure it ends with ].
 `;
 
-    // Models to try (Llama first, fallback to GPT for better structure)
     const models = [
       "meta-llama/llama-3.1-70b-instruct",
-      "openai/gpt-4o-mini"  // Better at JSON; switch if Llama fails often
+      "openai/gpt-4o-mini"
     ];
 
     let questions = null;
     let retryCount = 0;
     const maxRetries = 2;
+    let llmResponse = "";
 
     while (!questions && retryCount < maxRetries) {
-      const model = models[retryCount];  // Switch model on retry
-      const maxTokens = retryCount === 0 ? 8192 : 16384;  // Higher on retry
+      const model = models[retryCount];
+      const maxTokens = retryCount === 0 ? 8192 : 16384;
 
-      const llmResponse = await callAI(prompt, model, maxTokens);
+      llmResponse = await callAI(prompt, model, maxTokens);
       console.log(`Attempt ${retryCount + 1} with ${model}, tokens: ${maxTokens}. Response length: ${llmResponse.length}`);
 
       questions = await extractAndValidateJSON(llmResponse, expectedCount);
@@ -91,44 +98,32 @@ async function callAI(prompt, model, maxTokens) {
 async function extractAndValidateJSON(llmResponse, expectedCount) {
   console.log("Full response preview:", llmResponse.substring(0, 500) + (llmResponse.length > 500 ? "..." : ""));
 
-  // Find start of array
   const startIndex = llmResponse.indexOf('[');
   if (startIndex === -1) {
     throw new Error("No opening [ found. Response preview: " + llmResponse.substring(0, 300));
   }
 
-  // Take from [ to end (for truncated cases)
   let jsonString = llmResponse.substring(startIndex);
-
-  // If has closing ], use greedy match for safety
   const endIndex = llmResponse.lastIndexOf(']');
   if (endIndex > startIndex) {
     jsonString = llmResponse.substring(startIndex, endIndex + 1);
   } else {
     console.warn("No closing ] found - using partial response from [ to end");
-    // Add closing ] if missing (hack for truncation)
-    if (!jsonString.endsWith(']')) {
-      jsonString += ']';
-    }
+    if (!jsonString.endsWith(']')) jsonString += ']';
   }
 
   console.log("Extracted JSON preview:", jsonString.substring(0, 300) + (jsonString.length > 300 ? "..." : ""));
 
   try {
     const parsed = JSON.parse(jsonString);
-    if (!Array.isArray(parsed)) {
-      throw new Error("Parsed content is not an array");
-    }
+    if (!Array.isArray(parsed)) throw new Error("Parsed content is not an array");
 
-    // Validate and extract valid questions (handle partial array)
     const validatedQuestions = [];
     parsed.forEach((q, i) => {
       if (q && q.question && Array.isArray(q.options) && q.options.length === 4 && q.correctAnswer) {
         const trimmedCorrect = q.correctAnswer.trim();
         const cleanedOptions = q.options.map(opt => opt.trim());
-        const hasExactMatch = cleanedOptions.includes(trimmedCorrect);
-
-        if (hasExactMatch) {
+        if (cleanedOptions.includes(trimmedCorrect)) {
           validatedQuestions.push({
             question: q.question.trim(),
             options: cleanedOptions,
@@ -143,24 +138,19 @@ async function extractAndValidateJSON(llmResponse, expectedCount) {
       }
     });
 
-    const validCount = validatedQuestions.length;
-    if (validCount === 0) {
+    if (validatedQuestions.length === 0) {
       throw new Error(`No valid questions parsed. Parsed ${parsed.length} items, but all invalid.`);
     }
 
-    if (validCount < expectedCount) {
-      console.warn(`Partial success: ${validCount}/${expectedCount} valid questions (likely truncation).`);
+    if (validatedQuestions.length < expectedCount) {
+      console.warn(`Partial success: ${validatedQuestions.length}/${expectedCount} valid questions (likely truncation).`);
     }
 
     return validatedQuestions;
 
   } catch (parseErr) {
-    // Detect truncation patterns
     const isTruncated = jsonString.includes('"correctAnswer": "') && !jsonString.includes(', "correctAnswer"') || 
                         jsonString.endsWith('"') || jsonString.endsWith(' ');
-
-    const errorMsg = `JSON parse failed: ${parseErr.message}. Likely ${isTruncated ? 'truncated' : 'malformed'}. JSON: ${jsonString.substring(0, 400)}`;
-    console.error(errorMsg);
-    throw new Error(errorMsg);
+    throw new Error(`JSON parse failed: ${parseErr.message}. Likely ${isTruncated ? 'truncated' : 'malformed'}. JSON: ${jsonString.substring(0, 400)}`);
   }
 }
