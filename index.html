@@ -137,10 +137,10 @@
         let yStart = margin + 10;
         let pageCount = 1;
 
-        // Noto Sans Devanagari Font
-        doc.addFileToVFS("NotoSansDevanagari-Regular-normal.ttf", window.NotoSansDevanagariRegularNormal);
-        doc.addFont("NotoSansDevanagari-Regular-normal.ttf", "NotoSans", "normal");
-        doc.setFont("NotoSans");
+         // Noto Sans Devanagari Font
+doc.addFileToVFS("NotoSansDevanagari-Regular-normal.ttf", font);  // 'font' variable use करो
+doc.addFont("NotoSansDevanagari-Regular-normal.ttf", "NotoSans", "normal");
+doc.setFont("NotoSans");
 
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i];
