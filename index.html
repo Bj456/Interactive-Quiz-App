@@ -106,67 +106,73 @@
     </div>
 
     <footer>
-        <p>Developed by <strong><a href="https://sites.google.com/view/teacher-bhaskar-joshi/home" target="_blank">Teacher Bhaskar Joshi</a></strong></p>
-
+        <p>Developed by <strong><a href="mailto:bhaskarjoshi2024@gmail.com">Teacher Bhaskar Joshi</a></strong></p>
     </footer>
-<script>
-document.getElementById('download-pdf').addEventListener('click', () => {
-    generatePDF(window.questions || [], "Teacher Bhaskar Joshi");
-});
 
-function generatePDF(questions, developerName) {
-    if (!questions || questions.length === 0) return alert("No questions available to generate PDF.");
+    <!-- PDF & Font Scripts -->
+    <script src="NotoSansDevanagari-Regular-normal.js"></script> <!-- Root में रखा गया -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    <script>
+    document.getElementById('download-pdf').addEventListener('click', () => {
+        generatePDF(window.questions || [], "Teacher Bhaskar Joshi");
+    });
 
-    const margin = 10;
-    const colGap = 10;
-    const lineHeight = 6;
-    const colWidth = (pageWidth - margin * 2 - colGap) / 2;
-    const questionsPerPage = 20;
+    function generatePDF(questions, developerName) {
+        if (!questions || questions.length === 0) return alert("No questions available to generate PDF.");
 
-    let xLeft = margin;
-    let xRight = margin + colWidth + colGap;
-    let yStart = margin + 10;
-    let pageCount = 1;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
 
-    for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        const posInPage = i % questionsPerPage;
-        const isLeft = posInPage < 10;
-        const x = isLeft ? xLeft : xRight;
-        const rowIndex = posInPage % 10;
-        let y = yStart + rowIndex * (lineHeight * (q.answers.length + 1) + 2);
+        const margin = 10;
+        const colGap = 10;
+        const lineHeight = 6;
+        const colWidth = (pageWidth - margin * 2 - colGap) / 2;
+        const questionsPerPage = 20;
 
-        doc.setFontSize(10);
-        doc.text(`${i + 1}. ${q.question}`, x, y);
+        let xLeft = margin;
+        let xRight = margin + colWidth + colGap;
+        let yStart = margin + 10;
+        let pageCount = 1;
 
-        q.answers.forEach((opt, idx) => {
-            doc.text(`(${String.fromCharCode(97 + idx)}) ${opt}`, x + 2, y + lineHeight * (idx + 1));
-        });
+        // Noto Sans Devanagari Font
+        doc.addFileToVFS("NotoSansDevanagari-Regular-normal.ttf", window.NotoSansDevanagariRegularNormal);
+        doc.addFont("NotoSansDevanagari-Regular-normal.ttf", "NotoSans", "normal");
+        doc.setFont("NotoSans");
 
-        if ((posInPage === questionsPerPage - 1) || (i === questions.length - 1)) {
-            doc.setFontSize(8);
-            doc.text(`Developed by ${developerName}`, pageWidth / 2, pageHeight - 12, { align: 'center' });
-            doc.text(`Page ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            const posInPage = i % questionsPerPage;
+            const isLeft = posInPage < 10;
+            const x = isLeft ? xLeft : xRight;
+            const rowIndex = posInPage % 10;
+            let y = yStart + rowIndex * (lineHeight * (q.answers.length + 1) + 2);
 
-            if (i !== questions.length - 1) {
-                doc.addPage();
-                pageCount++;
+            doc.setFontSize(10);
+            doc.text(`${i + 1}. ${q.question}`, x, y);
+
+            q.answers.forEach((opt, idx) => {
+                doc.text(`(${String.fromCharCode(97 + idx)}) ${opt}`, x + 2, y + lineHeight * (idx + 1));
+            });
+
+            if ((posInPage === questionsPerPage - 1) || (i === questions.length - 1)) {
+                doc.setFontSize(8);
+                doc.text(`Developed by ${developerName}`, pageWidth / 2, pageHeight - 12, { align: 'center' });
+                doc.text(`Page ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+
+                if (i !== questions.length - 1) {
+                    doc.addPage();
+                    pageCount++;
+                }
             }
         }
-    }
 
-    doc.save('AI_Quiz.pdf');
-}
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        doc.save('AI_Quiz.pdf');
+    }
+    </script>
+
     <script src="script.js"></script>
 </body>
 </html>
-
-
-
