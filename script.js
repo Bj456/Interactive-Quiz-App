@@ -1,10 +1,15 @@
 // ===================================================================================
 //
-// ✅ SECURE VERSION: API calls go through Netlify Functions
-// Your API key stays hidden in Netlify Environment Variables.
-// You must create: /netlify/functions/quiz.js (as backend function)
+// 🚨 DANGER: EXPOSING YOUR API KEY IN CLIENT-SIDE CODE IS A SEVERE SECURITY RISK! 🚨
+//
+// Anyone can view this code and steal your key. For a real application, this API
+// call MUST be made from a backend server where the key can be kept secret.
+// This implementation is for educational purposes only, as per the request.
 //
 // ===================================================================================
+
+const OPENROUTER_API_KEY = "YOUR API KEY HERE";
+const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // DOM Elements
 const loadingOverlay = document.getElementById('loading-overlay');
@@ -71,23 +76,9 @@ async function startQuiz(e) {
 
     try {
         await generateQuestionsWithAI();
-        window.questions = questions; // This line makes questions global for PDF
-        try {
-    await generateQuestionsWithAI();
-    window.questions = questions;  // Already there (PDF के लिए)
-    window.quizSettings = quizSettings;  // <-- ये नई line add करो (language/topic access के लिए)
-    if (questions && questions.length > 0) {
-        currentQuestionIndex = 0;
-        score = 0;
-        scoreCounter.textContent = `Score: 0`;
-        showScreen(quizScreen);
-        showQuestion();
-    } else {
-        throw new Error("The AI did not return any questions. Please try a different topic or settings.");
-    }
-} catch (error) {
-    showError(error.message);
-}
+        window.questions = questions;  // Added for PDF access (questions global)
+        window.quizSettings = quizSettings;  // Added for PDF access (language/topic global)
+        
         if (questions && questions.length > 0) {
             currentQuestionIndex = 0;
             score = 0;
@@ -106,32 +97,63 @@ async function startQuiz(e) {
 }
 
 async function generateQuestionsWithAI() {
-  try {
     const { topic, numQuestions, difficulty, language } = quizSettings;
 
-    const response = await fetch("/.netlify/functions/quiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, numQuestions, difficulty, language })
-    });
+    const prompt = `
+        Generate a ${numQuestions}-question multiple-choice quiz about "${topic}".
+        The difficulty level must be "${difficulty}".
+        The quiz must be entirely in the "${language}" language.
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || "Failed to generate quiz");
+        VERY IMPORTANT: Your entire response must be ONLY a valid JSON array of objects.
+        Do not include any text, explanation, or markdown backticks like \`\`\`json.
+
+        Each object in the array must have this exact structure:
+        {
+          "question": "The question text in ${language}",
+          "options": ["An incorrect option", "Another incorrect option", "The correct option", "A third incorrect option"],
+          "correctAnswer": "The exact text of the correct option"
+        }
+
+        Ensure the "correctAnswer" value is always one of the strings present in the "options" array.
+        Shuffle the position of the correct answer within the "options" array for each question.
+    `;
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://github.com/aakhalidhruv28/Interactive-Quiz-App', 
+                'X-Title': 'AI Interactive Quiz App'
+            },
+            body: JSON.stringify({
+                model: "meta-llama/llama-3.1-70b-instruct",
+                messages: [{ role: "user", content: prompt }]
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            const errorMsg = errorData?.error?.message || `API Error: ${response.status}`;
+            throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        const llmResponse = data.choices[0].message.content;
+        
+        const parsedQuestions = JSON.parse(llmResponse);
+        questions = parsedQuestions.map(q => ({
+            question: q.question,
+            answers: q.options,
+            correct_answer: q.correctAnswer
+        }));
+
+    } catch (error) {
+        console.error("Error generating quiz with AI:", error);
+        questions = [];
+        throw error; // Re-throw the error to be caught by startQuiz
     }
-
-    const data = await response.json();
-    questions = data.questions.map(q => ({
-      question: q.question,
-      answers: q.options,
-      correct_answer: q.correctAnswer
-    }));
-
-  } catch (error) {
-    console.error("Error generating quiz with AI:", error);
-    questions = [];
-    throw error;
-  }
 }
 
 function showQuestion() {
@@ -146,7 +168,7 @@ function showQuestion() {
 
     shuffledAnswers.forEach(answer => {
         const button = document.createElement('button');
-        button.innerHTML = `<span>${answer}</span>`;
+        button.innerHTML = `<span>${answer}</span>`; // Wrap text in span for icon placement
         button.classList.add('btn');
         if (answer === currentQuestion.correct_answer) {
             button.dataset.correct = true;
