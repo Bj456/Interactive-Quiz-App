@@ -72,6 +72,22 @@ async function startQuiz(e) {
     try {
         await generateQuestionsWithAI();
         window.questions = questions; // This line makes questions global for PDF
+        try {
+    await generateQuestionsWithAI();
+    window.questions = questions;  // Already there (PDF के लिए)
+    window.quizSettings = quizSettings;  // <-- ये नई line add करो (language/topic access के लिए)
+    if (questions && questions.length > 0) {
+        currentQuestionIndex = 0;
+        score = 0;
+        scoreCounter.textContent = `Score: 0`;
+        showScreen(quizScreen);
+        showQuestion();
+    } else {
+        throw new Error("The AI did not return any questions. Please try a different topic or settings.");
+    }
+} catch (error) {
+    showError(error.message);
+}
         if (questions && questions.length > 0) {
             currentQuestionIndex = 0;
             score = 0;
