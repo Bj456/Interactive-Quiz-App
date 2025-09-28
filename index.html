@@ -125,64 +125,62 @@
 
     const margin = 10;
     const colGap = 10;
-    const lineHeight = 6;
     const colWidth = (pageWidth - margin * 2 - colGap) / 2;
-    const questionsPerPage = 20;
 
     let xLeft = margin;
     let xRight = margin + colWidth + colGap;
-    let yStart = margin + 20;
+    let yLeft = margin + 22;
+    let yRight = margin + 22;
     let pageCount = 1;
 
-    // Header
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(topic, pageWidth / 2, margin + 5, { align: 'center' });
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text("(Developed by Teacher Bhaskar Joshi)", pageWidth / 2, margin + 12, { align: 'center' });
+    function addHeader() {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text(topic, pageWidth / 2, margin + 5, { align: 'center' });
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text("(Developed by Teacher Bhaskar Joshi)", pageWidth / 2, margin + 12, { align: 'center' });
+    }
 
-    yStart = margin + 22;
+    addHeader();
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      const posInPage = i % questionsPerPage;
-      const isLeft = posInPage < 10;
+
+      const isLeft = yLeft <= yRight;
       const x = isLeft ? xLeft : xRight;
-      const rowIndex = posInPage % 10;
-      let y = yStart + rowIndex * (lineHeight * (q.answers.length + 1) + 6);
+      let y = isLeft ? yLeft : yRight;
 
       doc.setFontSize(10);
       const questionText = `${i + 1}. ${q.question}`;
       const splitQuestion = doc.splitTextToSize(questionText, colWidth - 4);
       doc.text(splitQuestion, x, y);
 
+      let usedHeight = splitQuestion.length * 6;
+
       q.answers.forEach((opt, idx) => {
         const optText = `(${String.fromCharCode(97 + idx)}) ${opt}`;
         const splitOpt = doc.splitTextToSize(optText, colWidth - 6);
-        doc.text(splitOpt, x + 2, y + lineHeight * (idx + 1));
+        doc.text(splitOpt, x + 2, y + usedHeight + idx * 6);
       });
 
-      if ((posInPage === questionsPerPage - 1) || (i === questions.length - 1)) {
-        // Footer
+      usedHeight += q.answers.length * 6 + 4;
+
+      if (isLeft) yLeft += usedHeight; else yRight += usedHeight;
+
+      if (yLeft > pageHeight - margin - 10 && yRight > pageHeight - margin - 10) {
         doc.setFontSize(8);
         doc.text(`Page ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
-
-        if (i !== questions.length - 1) {
-          doc.addPage();
-          pageCount++;
-
-          // Repeat header on new page
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(14);
-          doc.text(topic, pageWidth / 2, margin + 5, { align: 'center' });
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'normal');
-          doc.text("(Developed by Teacher Bhaskar Joshi)", pageWidth / 2, margin + 12, { align: 'center' });
-          yStart = margin + 22;
-        }
+        doc.addPage();
+        pageCount++;
+        addHeader();
+        yLeft = margin + 22;
+        yRight = margin + 22;
       }
     }
+
+    doc.setFontSize(8);
+    doc.text(`Page ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
 
     doc.save(`Quiz_${topic}.pdf`);
   }
