@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <div id="loading-overlay" class="hidden">
@@ -91,6 +92,7 @@
             <div class="quiz-footer">
                 <button id="hint-btn" class="btn btn-secondary hidden">Get a Hint 🤔</button>
                 <button id="next-btn" class="btn btn-primary hidden">Next Question</button>
+                <button id="download-pdf" class="btn btn-secondary">📄 Download PDF</button> <!-- Added for PDF (Minimal, matches style) -->
             </div>
         </div>
 
@@ -108,9 +110,130 @@
         <p><a href="https://github.com/aakhalidhruv28/Interactive-Quiz-App" target="_blank">View the Free Source Code on GitHub</a></p>
     </footer>
 
+    <!-- Working PDF Script (Hindi Font Fix – Integrated Minimally) -->
+    <script>
+    // PDF Event Listener (For Added Button in Quiz Footer)
+    document.addEventListener('DOMContentLoaded', () => {
+        const downloadPdfBtn = document.getElementById('download-pdf');
+        if (downloadPdfBtn) {
+            downloadPdfBtn.addEventListener('click', () => {
+                generatePDF(window.questions || [], "Dhruv Aakhali", window.quizSettings ? window.quizSettings.language : 'English');
+            });
+        }
+    });
+
+    // Working generatePDF Function (Base64 Hindi Font Support)
+    async function generatePDF(questions, developerName, language) {
+        if (!questions || questions.length === 0) return alert("No questions available to generate PDF.");
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        const margin = 10;
+        const colGap = 10;
+        const lineHeight = 6;
+        const colWidth = (pageWidth - margin * 2 - colGap) / 2;
+        const questionsPerPage = 20;
+
+        let hindiFontLoaded = false;
+        if (language === 'Hindi' || language === 'Gujarati') {  // Support for both (Gujarati may need separate font if added later)
+            try {
+                const fontUrl = '/fonts/NotoSansDevanagari-Regular.ttf';  // For Hindi; add Gujarati font if needed
+                const fontResponse = await fetch(fontUrl);
+                if (!fontResponse.ok) throw new Error('Font not found');
+                const fontBlob = await fontResponse.blob();
+                
+                const reader = new FileReader();
+                const base64Promise = new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(fontBlob);
+                });
+                const base64Font = await base64Promise;
+                
+                doc.addFileToVFS('NotoSansDevanagari-Regular.ttf', base64Font);
+                doc.addFont('NotoSansDevanagari-Regular.ttf', 'NotoSansDevanagari', 'normal');
+                doc.setFont('NotoSansDevanagari');
+                hindiFontLoaded = true;
+                doc.setFontSize(10);
+            } catch (error) {
+                console.warn('Hindi/Gujarati font load failed, using default:', error);
+                doc.setFont('helvetica');
+                doc.setFontSize(10);
+            }
+        } else {
+            doc.setFont('helvetica');
+            doc.setFontSize(10);
+        }
+
+        let xLeft = margin;
+        let xRight = margin + colWidth + colGap;
+        let yStart = margin + 10;
+        let pageCount = 1;
+
+        // Title
+        doc.setFontSize(16);
+        doc.text('AI Generated Quiz', pageWidth / 2, margin, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(`Topic: ${window.quizSettings ? window.quizSettings.topic : 'General'} | Language: ${language}`, pageWidth / 2, margin + 10, { align: 'center' });
+        yStart += 20;
+
+        // Questions Loop
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            const posInPage = i % questionsPerPage;
+            const isLeft = posInPage < 10;
+            const x = isLeft ? xLeft : xRight;
+            const rowIndex = posInPage % 10;
+            let y = yStart + rowIndex * (lineHeight * (q.answers.length + 1) + 5);
+
+            // Question Text (Font Switch)
+            if (hindiFontLoaded && (language === 'Hindi' || language === 'Gujarati')) {
+                doc.setFont('NotoSansDevanagari');
+            } else {
+                doc.setFont('helvetica');
+            }
+            doc.setFontSize(10);
+            const questionText = `${i + 1}. ${q.question}`;
+            const splitQuestion = doc.splitTextToSize(questionText, colWidth - 4);
+            doc.text(splitQuestion, x, y);
+
+            // Options (Font Switch)
+            q.answers.forEach((opt, idx) => {
+                if (hindiFontLoaded && (language === 'Hindi' || language === 'Gujarati')) {
+                    doc.setFont('NotoSansDevanagari');
+                } else {
+                    doc.setFont('helvetica');
+                }
+                doc.setFontSize(9);
+                const optText = `(${String.fromCharCode(97 + idx)}) ${opt}`;
+                const splitText = doc.splitTextToSize(optText, colWidth - 4);
+                doc.text(splitText, x + 2, y + lineHeight * (idx + 1));
+            });
+
+            // New Page & Footer
+            if ((posInPage === questionsPerPage - 1) || (i === questions.length - 1)) {
+                doc.setFont('helvetica');
+                doc.setFontSize(8);
+                doc.text(`Developed by ${developerName}`, pageWidth / 2, pageHeight - 12, { align: 'center' });
+                doc.text(`Page ${pageCount} | Total Questions: ${questions.length}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+
+                if (i !== questions.length - 1) {
+                    doc.addPage();
+                    pageCount++;
+                    yStart = margin + 10;
+                }
+            }
+        }
+
+        // Save PDF (Safe Filename)
+        const safeTopic = (window.quizSettings ? window.quizSettings.topic : 'General').replace(/[^a-zA-Z0-9]/g, '_');
+        doc.save(`AI_Quiz_${language}_${safeTopic}.pdf`);
+    }
+    </script>
+
     <script src="script.js"></script>
 </body>
 </html>
-
-
-<!-- Developed By Dhruv Aakhali -->
