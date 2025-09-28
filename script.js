@@ -1,57 +1,93 @@
-// Global Variables
-let currentQuestionIndex = 0;
-let score = 0;
-let timerInterval;
-let timeLeft;
-let questions = [];
-let quizSettings = {};
-let hintUsed = false;
+// ===================================================================================
+//
+// ✅ SECURE VERSION: API calls go through Netlify Functions
+// Your API key stays hidden in Netlify Environment Variables.
+// You must create: /netlify/functions/quiz.js (as backend function)
+//
+// ===================================================================================
 
 // DOM Elements
+const loadingOverlay = document.getElementById('loading-overlay');
+const errorMessage = document.getElementById('error-message');
 const startScreen = document.getElementById('start-screen');
 const quizScreen = document.getElementById('quiz-screen');
 const scoreScreen = document.getElementById('score-screen');
-const loadingOverlay = document.getElementById('loading-overlay');
-const errorMessage = document.getElementById('error-message');
-const questionElement = document.getElementById('question');
-const answerButtons = document.getElementById('answer-buttons');
-const hintBtn = document.getElementById('hint-btn');
-const nextBtn = document.getElementById('next-btn');
+
+const settingsForm = document.getElementById('quiz-settings-form');
+const topicInput = document.getElementById('topic');
+const numQuestionsInput = document.getElementById('num-questions');
+const difficultySelect = document.getElementById('difficulty');
+const languageSelect = document.getElementById('language');
+const timerDurationInput = document.getElementById('timer-duration');
+const startBtn = document.getElementById('start-btn');
+
+const progressBar = document.getElementById('progress-bar');
 const questionCounter = document.getElementById('question-counter');
 const scoreCounter = document.getElementById('score-counter');
-const timerElement = document.getElementById('timer');
-const progressBar = document.getElementById('progress-bar');
-const finalScore = document.getElementById('final-score');
-const scoreFeedback = document.getElementById('score-feedback');
+const timerDisplay = document.getElementById('timer');
+const questionElement = document.getElementById('question');
+const answerButtonsElement = document.getElementById('answer-buttons');
+const hintBtn = document.getElementById('hint-btn');
+const nextBtn = document.getElementById('next-btn');
+
+const finalScoreElement = document.getElementById('final-score');
+const scoreFeedbackElement = document.getElementById('score-feedback');
 const playAgainBtn = document.getElementById('play-again-btn');
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('quiz-settings-form');
-    form.addEventListener('submit', startQuiz);
-    playAgainBtn.addEventListener('click', resetQuiz);
-});
+// State Variables
+let questions = [];
+let currentQuestionIndex = 0;
+let score = 0;
+let timer;
+let timeLeft;
+let quizSettings = {};
 
-// Start Quiz
+// --- Event Listeners ---
+settingsForm.addEventListener('submit', startQuiz);
+nextBtn.addEventListener('click', handleNextButton);
+playAgainBtn.addEventListener('click', resetAndRestart);
+hintBtn.addEventListener('click', showHint);
+
+function showScreen(screen) {
+    [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
+    screen.classList.remove('hidden');
+}
+
 async function startQuiz(e) {
     e.preventDefault();
-    showLoading(true);
+    errorMessage.classList.add('hidden'); // Hide any previous errors
     
+    quizSettings = {
+        topic: topicInput.value,
+        numQuestions: numQuestionsInput.value,
+        difficulty: difficultySelect.value,
+        language: languageSelect.value,
+        timerDuration: parseInt(timerDurationInput.value, 10),
+        hintsEnabled: document.querySelector('input[name="hint-option"]:checked').value === 'enable'
+    };
+    
+    loadingOverlay.classList.remove('hidden');
+    startBtn.disabled = true;
+
     try {
-        // Get settings from form
-        quizSettings = {
-            topic: document.getElementById('topic').value,
-            numQuestions: parseInt(document.getElementById('num-questions').value),
-            difficulty: document.getElementById('difficulty').value,
-            language: document.getElementById('language').value,
-            timerDuration: parseInt(document.getElementById('timer-duration').value),
-            hintsEnabled: document.querySelector('input[name="hint-option"]:checked').value === 'enable'
-        };
-        
         await generateQuestionsWithAI();
-        window.questions = questions;  // For PDF access (original)
-        window.quizSettings = quizSettings;  // <-- Added this line for Hindi PDF (language/topic global access)
-        
+        window.questions = questions; // This line makes questions global for PDF
+        try {
+    await generateQuestionsWithAI();
+    window.questions = questions;  // Already there (PDF के लिए)
+    window.quizSettings = quizSettings;  // <-- ये नई line add करो (language/topic access के लिए)
+    if (questions && questions.length > 0) {
+        currentQuestionIndex = 0;
+        score = 0;
+        scoreCounter.textContent = `Score: 0`;
+        showScreen(quizScreen);
+        showQuestion();
+    } else {
+        throw new Error("The AI did not return any questions. Please try a different topic or settings.");
+    }
+} catch (error) {
+    showError(error.message);
+}
         if (questions && questions.length > 0) {
             currentQuestionIndex = 0;
             score = 0;
@@ -64,185 +100,165 @@ async function startQuiz(e) {
     } catch (error) {
         showError(error.message);
     } finally {
-        showLoading(false);
+        loadingOverlay.classList.add('hidden');
+        startBtn.disabled = false;
     }
 }
 
-// Generate Questions with AI (Netlify Function)
 async function generateQuestionsWithAI() {
-    const prompt = `Generate ${quizSettings.numQuestions} multiple-choice quiz questions on the topic "${quizSettings.topic}" at ${quizSettings.difficulty} difficulty level in ${quizSettings.language} language. Each question should have 4 options (a, b, c, d) with one correct answer. Format as JSON array of objects: [{"question": "Question text?", "answers": ["option a", "option b", "option c", "option d"], "correctIndex": 0}, ...]. Do not include explanations or extra text.`;
-    
-    try {
-        const response = await fetch('/.netlify/functions/generate-quiz', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
-        
-        if (!response.ok) throw new Error(`AI service error: ${response.status}`);
-        
-        const data = await response.json();
-        questions = JSON.parse(data.questions);
-        
-        // Ensure correctIndex is within bounds
-        questions.forEach(q => {
-            if (q.correctIndex >= q.answers.length) q.correctIndex = 0;
-        });
-    } catch (error) {
-        console.error('AI Generation Error:', error);
-        throw new Error('Failed to generate questions. Please check your topic and try again.');
+  try {
+    const { topic, numQuestions, difficulty, language } = quizSettings;
+
+    const response = await fetch("/.netlify/functions/quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, numQuestions, difficulty, language })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to generate quiz");
     }
+
+    const data = await response.json();
+    questions = data.questions.map(q => ({
+      question: q.question,
+      answers: q.options,
+      correct_answer: q.correctAnswer
+    }));
+
+  } catch (error) {
+    console.error("Error generating quiz with AI:", error);
+    questions = [];
+    throw error;
+  }
 }
 
-// Show Screen
-function showScreen(screen) {
-    [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
-    screen.classList.remove('hidden');
-}
-
-// Show Loading
-function showLoading(show) {
-    loadingOverlay.classList.toggle('hidden', !show);
-}
-
-// Show Error
-function showError(message) {
-    const errorP = errorMessage.querySelector('p');
-    errorP.textContent = message;
-    errorMessage.classList.remove('hidden');
-}
-
-// Show Question
 function showQuestion() {
-    if (currentQuestionIndex >= questions.length) {
-        endQuiz();
-        return;
-    }
+    resetState();
+    const currentQuestion = questions[currentQuestionIndex];
     
-    const q = questions[currentQuestionIndex];
-    questionElement.textContent = q.question;
-    answerButtons.innerHTML = '';
-    hintUsed = false;
-    
-    // Update UI
+    questionElement.textContent = currentQuestion.question; 
     questionCounter.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
-    updateProgress();
-    
-    // Timer
-    if (quizSettings.timerDuration > 0) {
-        timeLeft = quizSettings.timerDuration;
-        timerElement.textContent = `Time: ${timeLeft}`;
-        startTimer();
-    } else {
-        timerElement.textContent = 'Time: No Timer';
-        clearInterval(timerInterval);
-    }
-    
-    // Hint Button
+    progressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
+
+    const shuffledAnswers = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
+
+    shuffledAnswers.forEach(answer => {
+        const button = document.createElement('button');
+        button.innerHTML = `<span>${answer}</span>`;
+        button.classList.add('btn');
+        if (answer === currentQuestion.correct_answer) {
+            button.dataset.correct = true;
+        }
+        button.addEventListener('click', selectAnswer);
+        answerButtonsElement.appendChild(button);
+    });
+
     if (quizSettings.hintsEnabled) {
         hintBtn.classList.remove('hidden');
-        hintBtn.onclick = () => showHint(q);
-    } else {
-        hintBtn.classList.add('hidden');
+        hintBtn.disabled = false;
     }
-    
-    // Answer Buttons
-    q.answers.forEach((answer, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'answer-btn';
-        btn.textContent = `${String.fromCharCode(97 + index)}) ${answer}`;
-        btn.onclick = () => selectAnswer(index, q.correctIndex);
-        answerButtons.appendChild(btn);
-    });
-    
-    nextBtn.classList.add('hidden');
+
+    startTimer();
 }
 
-// Select Answer
-function selectAnswer(selectedIndex, correctIndex) {
-    clearInterval(timerInterval);
-    
-    const buttons = answerButtons.querySelectorAll('.answer-btn');
-    buttons.forEach((btn, index) => {
-        btn.disabled = true;
-        if (index === correctIndex) {
-            btn.classList.add('correct');
-        } else if (index === selectedIndex && index !== correctIndex) {
-            btn.classList.add('wrong');
-        }
-    });
-    
-    if (selectedIndex === correctIndex) {
-        score++;
-        scoreCounter.textContent = `Score: ${score}`;
-    }
-    
-    nextBtn.classList.remove('hidden');
-    nextBtn.onclick = nextQuestion;
-}
-
-// Next Question
-function nextQuestion() {
-    currentQuestionIndex++;
-    showQuestion();
-}
-
-// Show Hint
-function showHint(q) {
-    if (hintUsed) return;
-    hintUsed = true;
-    
-    const hintText = `Hint: The answer is option ${String.fromCharCode(97 + q.correctIndex)}.`;
-    alert(hintText);  // Simple alert, can be improved with modal
-}
-
-// Start Timer
 function startTimer() {
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
+    timeLeft = quizSettings.timerDuration;
+    timerDisplay.textContent = `Time: ${timeLeft}`;
+    clearInterval(timer); 
+    timer = setInterval(() => {
         timeLeft--;
-        timerElement.textContent = `Time: ${timeLeft}`;
-        
+        timerDisplay.textContent = `Time: ${timeLeft}`;
         if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            selectAnswer(-1, questions[currentQuestionIndex].correctIndex);  // Auto wrong
+            clearInterval(timer);
+            handleTimeUp();
         }
     }, 1000);
 }
 
-// Update Progress
-function updateProgress() {
-    const progress = ((currentQuestionIndex) / questions.length) * 100;
-    progressBar.style.width = progress + '%';
+function handleTimeUp() {
+    Array.from(answerButtonsElement.children).forEach(button => {
+        setStatusClass(button, button.dataset.correct);
+        button.disabled = true;
+    });
+    nextBtn.classList.remove('hidden');
+    hintBtn.classList.add('hidden');
 }
 
-// End Quiz
-function endQuiz() {
-    clearInterval(timerInterval);
-    const percentage = Math.round((score / questions.length) * 100);
-    
-    finalScore.textContent = `You scored ${score} out of ${questions.length} (${percentage}%)`;
-    
-    if (percentage >= 90) {
-        scoreFeedback.textContent = 'Outstanding!';
-    } else if (percentage >= 70) {
-        scoreFeedback.textContent = 'Great job!';
-    } else if (percentage >= 50) {
-        scoreFeedback.textContent = 'Good effort!';
+function selectAnswer(e) {
+    clearInterval(timer);
+    const selectedButton = e.currentTarget;
+    const isCorrect = selectedButton.dataset.correct === 'true';
+
+    if (isCorrect) {
+        score++;
+        scoreCounter.textContent = `Score: ${score}`;
+    }
+
+    Array.from(answerButtonsElement.children).forEach(button => {
+        setStatusClass(button, button.dataset.correct);
+        button.disabled = true;
+    });
+
+    if (questions.length > currentQuestionIndex + 1) {
+        nextBtn.classList.remove('hidden');
     } else {
-        scoreFeedback.textContent = 'Keep practicing!';
+        setTimeout(showFinalScore, 1500); 
     }
     
-    showScreen(scoreScreen);
+    hintBtn.classList.add('hidden');
 }
 
-// Reset Quiz
-function resetQuiz() {
-    currentQuestionIndex = 0;
-    score = 0;
-    questions = [];
-    clearInterval(timerInterval);
+function handleNextButton() {
+    currentQuestionIndex++;
+    showQuestion();
+}
+
+function showFinalScore() {
+    showScreen(scoreScreen);
+    const scorePercent = Math.round((score / questions.length) * 100);
+    finalScoreElement.textContent = `You scored ${score} out of ${questions.length} (${scorePercent}%)`;
+
+    let feedback = '';
+    if (scorePercent === 100) feedback = "Flawless Victory! You're an absolute genius! 🏆";
+    else if (scorePercent >= 75) feedback = "Excellent! You have a deep knowledge of this topic. 🎉";
+    else if (scorePercent >= 50) feedback = "Good job! A very respectable score. 👍";
+    else feedback = "Nice try! Every quiz is a learning opportunity. 💪";
+    scoreFeedbackElement.textContent = feedback;
+}
+
+function showHint() {
+    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => !btn.dataset.correct);
+    if (incorrectButtons.length > 1) {
+        const buttonToDisable = incorrectButtons[Math.floor(Math.random() * incorrectButtons.length)];
+        buttonToDisable.style.visibility = 'hidden';
+        hintBtn.disabled = true;
+    }
+}
+
+function resetAndRestart() {
     showScreen(startScreen);
-    document.getElementById('quiz-settings-form').reset();
-    progressBar.style.width = '0%';
+}
+
+function showError(message) {
+    errorMessage.textContent = `⚠️ Error: ${message}`;
+    errorMessage.classList.remove('hidden');
+}
+
+// --- Utility Functions ---
+function resetState() {
+    nextBtn.classList.add('hidden');
+    hintBtn.classList.add('hidden');
+    answerButtonsElement.innerHTML = '';
+}
+
+function setStatusClass(button, isCorrect) {
+    if (isCorrect) {
+        button.classList.add('correct');
+        button.innerHTML += ' <span>✓</span>';
+    } else {
+        button.classList.add('incorrect');
+        button.innerHTML += ' <span>✗</span>';
+    }
 }
