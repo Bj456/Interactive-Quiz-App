@@ -287,6 +287,70 @@ function showFinalScore() {
     else feedback = "Nice try! Every quiz is a learning opportunity. 💪";
     scoreFeedbackElement.textContent = feedback;
 }
+// --- PDF Download Function ---
+async function downloadQuizPDF() {
+    if (!window.questions || window.questions.length === 0) {
+        alert("No questions available to generate PDF.");
+        return;
+    }
+
+    // Load the font from the JS file you added in root
+    const pdfMake = window.pdfMake;
+    const pdfFonts = window.pdfFonts;
+    pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+    // Prepare the content
+    const content = [];
+    const questionsPerPage = 20; // 10 left, 10 right
+
+    for (let i = 0; i < window.questions.length; i += questionsPerPage) {
+        const pageQuestions = window.questions.slice(i, i + questionsPerPage);
+        const leftCol = [];
+        const rightCol = [];
+
+        pageQuestions.forEach((q, idx) => {
+            const questionText = `${i + idx + 1}. ${q.question}`;
+            const optionsText = q.answers.map((opt, j) => `(${String.fromCharCode(97+j)}) ${opt}`).join('\n');
+
+            if (idx < questionsPerPage / 2) {
+                leftCol.push({ text: questionText, style: 'question' });
+                leftCol.push({ text: optionsText, style: 'options', margin: [0,0,0,10] });
+            } else {
+                rightCol.push({ text: questionText, style: 'question' });
+                rightCol.push({ text: optionsText, style: 'options', margin: [0,0,0,10] });
+            }
+        });
+
+        content.push({
+            columns: [
+                { width: '50%', stack: leftCol },
+                { width: '50%', stack: rightCol }
+            ],
+            columnGap: 20,
+            pageBreak: i + questionsPerPage < window.questions.length ? 'after' : undefined
+        });
+    }
+
+    const docDefinition = {
+        content: content,
+        defaultStyle: { font: 'NotoSansDevanagari' },
+        styles: {
+            question: { fontSize: 12, bold: true },
+            options: { fontSize: 11 }
+        },
+        footer: function(currentPage, pageCount) {
+            return {
+                text: `Developed by Teacher Bhaskar Joshi | Page ${currentPage} of ${pageCount}`,
+                alignment: 'center',
+                margin: [0, 0, 0, 10],
+                fontSize: 9
+            };
+        },
+        pageMargins: [40, 60, 40, 60]
+    };
+
+    pdfMake.createPdf(docDefinition).download('Quiz.pdf');
+}
 
 // --- Hint ---
 function showHint() {
