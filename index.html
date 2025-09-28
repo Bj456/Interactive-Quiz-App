@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Load Hindi font if needed
         let hindiFontLoaded = false;
-        if(language==='Hindi'){
+        if(language === 'Hindi' || language === 'Kumaoni'){
             try{
                 const fontUrl='/fonts/NotoSansDevanagari-Regular.ttf';
                 const fontResponse = await fetch(fontUrl);
