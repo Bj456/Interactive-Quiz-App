@@ -1,133 +1,247 @@
-// DOM और jsPDF लोड होने का इंतजार
-document.addEventListener('DOMContentLoaded', function() {
-    const statusEl = document.getElementById('status');
-    const quizForm = document.getElementById('quizForm');
-    const startQuizBtn = document.getElementById('startQuiz');
-    const quizSection = document.getElementById('quizSection');
-    const questionText = document.getElementById('questionText');
-    const nextButton = document.getElementById('nextButton');
-    const generateBtn = document.getElementById('generateQuiz');
-    const optionsDiv = document.getElementById('options');
+// ===================================================================================
+//
+// ✅ SECURE VERSION: API calls go through Netlify Functions
+// Your API key stays hidden in Netlify Environment Variables.
+// You must create: /netlify/functions/quiz.js (as backend function)
+//
+// ===================================================================================
 
-    // jsPDF चेक करें (अगर नहीं लोड, एरर दिखाएँ)
-    if (typeof window.jspdf === 'undefined') {
-        showError('jsPDF लाइब्रेरी लोड नहीं हुई। jspdf.umd.min.js चेक करें।');
-        return;
-    }
+// DOM Elements
+const loadingOverlay = document.getElementById('loading-overlay');
+const errorMessage = document.getElementById('error-message');
+const startScreen = document.getElementById('start-screen');
+const quizScreen = document.getElementById('quiz-screen');
+const scoreScreen = document.getElementById('score-screen');
 
-    // showError फंक्शन (लाइन 119 का एरर फिक्स)
-    function showError(message) {
-        statusEl.textContent = '❌ एरर: ' + message;
-        statusEl.style.color = 'red';
-        console.error('Error:', message);
-        alert('समस्या: ' + message);  // पॉपअप अलर्ट
-    }
+const settingsForm = document.getElementById('quiz-settings-form');
+const topicInput = document.getElementById('topic');
+const numQuestionsInput = document.getElementById('num-questions');
+const difficultySelect = document.getElementById('difficulty');
+const languageSelect = document.getElementById('language');
+const timerDurationInput = document.getElementById('timer-duration');
+const startBtn = document.getElementById('start-btn');
 
-    // handleNextButton फंक्शन (लाइन 47 का एरर फिक्स)
-    function handleNextButton() {
-        // नेक्स्ट प्रश्न लोड करें (उदाहरण: हार्डकोडेड या API से)
-        const questions = [
-            'पहला प्रश्न: हिंदी में "Hello" क्या कहते हैं?',
-            'दूसरा प्रश्न: भारत की राजधानी क्या है?',
-            'तीसरा प्रश्न: PDF में हिंदी फॉन्ट कैसे ऐड करें?'
-        ];
-        const currentQuestionIndex = Math.floor(Math.random() * questions.length);  // रैंडम चुनें
-        questionText.textContent = questions[currentQuestionIndex];
-        
-        // ऑप्शन्स ऐड करें (उदाहरण)
-        optionsDiv.innerHTML = `
-            <label><input type="radio" name="answer"> विकल्प A</label><br>
-            <label><input type="radio" name="answer"> विकल्प B</label><br>
-            <label><input type="radio" name="answer"> विकल्प C</label>
-        `;
-        
-        statusEl.textContent = '✅ अगला प्रश्न लोड हो गया!';
-        statusEl.style.color = 'green';
-        console.log('Next button clicked');
-    }
+const progressBar = document.getElementById('progress-bar');
+const questionCounter = document.getElementById('question-counter');
+const scoreCounter = document.getElementById('score-counter');
+const timerDisplay = document.getElementById('timer');
+const questionElement = document.getElementById('question');
+const answerButtonsElement = document.getElementById('answer-buttons');
+const hintBtn = document.getElementById('hint-btn');
+const nextBtn = document.getElementById('next-btn');
 
-    // क्विज़ स्टार्ट फंक्शन (फॉर्म सबमिट पर)
-    function startQuiz(event) {
-        event.preventDefault();  // फॉर्म डिफॉल्ट सबमिट रोकें
-        try {
-            // Netlify फंक्शन से क्विज़ डेटा फेच करें (अगर quiz.js फंक्शन है)
-            fetch('/.netlify/functions/quiz')
-                .then(response => {
-                    if (!response.ok) throw new Error('क्विज़ डेटा लोड नहीं हो सका');
-                    return response.json();
-                })
-                .then(data => {
-                    // डेटा से प्रश्न सेट करें (उदाहरण)
-                    questionText.textContent = data.question || 'नमस्ते! क्विज़ शुरू: पहला प्रश्न यहाँ।';
-                    optionsDiv.innerHTML = data.options ? data.options.map(opt => `<label><input type="radio" name="answer">${opt}</label><br>`).join('') : '';
-                    
-                    // क्विज़ सेक्शन दिखाएँ
-                    quizSection.style.display = 'block';
-                    startQuizBtn.style.display = 'none';  // स्टार्ट बटन छुपाएँ
-                    statusEl.textContent = '✅ क्विज़ सफलतापूर्वक शुरू हो गया!';
-                    statusEl.style.color = 'green';
-                })
-                .catch(error => {
-                    // अगर API फेल, लोकल डेटा यूज करें
-                    questionText.textContent = 'डिफॉल्ट प्रश्न: jsPDF में फॉन्ट कैसे ऐड करें?';
-                    optionsDiv.innerHTML = '<label><input type="radio" name="answer"> addFont() से</label><br><label><input type="radio" name="answer"> CDN से</label>';
-                    quizSection.style.display = 'block';
-                    showError('API एरर, लेकिन लोकल क्विज़ चल रहा है: ' + error.message);
-                });
-        } catch (error) {
-            showError('क्विज़ स्टार्ट करने में समस्या: ' + error.message);
+const finalScoreElement = document.getElementById('final-score');
+const scoreFeedbackElement = document.getElementById('score-feedback');
+const playAgainBtn = document.getElementById('play-again-btn');
+
+// State Variables
+let questions = [];
+let currentQuestionIndex = 0;
+let score = 0;
+let timer;
+let timeLeft;
+let quizSettings = {};
+
+// --- Event Listeners ---
+settingsForm.addEventListener('submit', startQuiz);
+nextBtn.addEventListener('click', handleNextButton);
+playAgainBtn.addEventListener('click', resetAndRestart);
+hintBtn.addEventListener('click', showHint);
+
+function showScreen(screen) {
+    [startScreen, quizScreen, scoreScreen].forEach(s => s.classList.add('hidden'));
+    screen.classList.remove('hidden');
+}
+
+async function startQuiz(e) {
+    e.preventDefault();
+    errorMessage.classList.add('hidden'); // Hide any previous errors
+    
+    quizSettings = {
+        topic: topicInput.value,
+        numQuestions: numQuestionsInput.value,
+        difficulty: difficultySelect.value,
+        language: languageSelect.value,
+        timerDuration: parseInt(timerDurationInput.value, 10),
+        hintsEnabled: document.querySelector('input[name="hint-option"]:checked').value === 'enable'
+    };
+    
+    loadingOverlay.classList.remove('hidden');
+    startBtn.disabled = true;
+
+    try {
+        await generateQuestionsWithAI();
+        if (questions && questions.length > 0) {
+            currentQuestionIndex = 0;
+            score = 0;
+            scoreCounter.textContent = `Score: 0`;
+            showScreen(quizScreen);
+            showQuestion();
+        } else {
+            throw new Error("The AI did not return any questions. Please try a different topic or settings.");
         }
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        loadingOverlay.classList.add('hidden');
+        startBtn.disabled = false;
+    }
+}
+
+async function generateQuestionsWithAI() {
+  try {
+    const { topic, numQuestions, difficulty, language } = quizSettings;
+
+    const response = await fetch("/.netlify/functions/quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, numQuestions, difficulty, language })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to generate quiz");
     }
 
-    // PDF जेनरेट फंक्शन (हिंदी फॉन्ट के साथ)
-    function generateQuizPDF() {
-        try {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+    const data = await response.json();
+    questions = data.questions.map(q => ({
+      question: q.question,
+      answers: q.options,
+      correct_answer: q.correctAnswer
+    }));
 
-            // हिंदी फॉन्ट सेट करें (अगर उपलब्ध, वरना डिफॉल्ट)
-            try {
-                doc.setFont('NotoSansDevanagari');  // आपका फॉन्ट नाम
-                doc.setFontSize(18);
-                doc.text('नमस्ते! क्विज़ रिपोर्ट', 10, 15);  // हिंदी टाइटल
-                doc.setFontSize(14);
-                doc.text('वर्तमान प्रश्न: ' + questionText.textContent, 10, 25);  // हिंदी प्रश्न
-                doc.text('उत्तर विकल्प: ऊपर दिए गए', 10, 35);
-            } catch (fontError) {
-                console.warn('हिंदी फॉन्ट उपलब्ध नहीं, डिफॉल्ट यूज कर रहे हैं:', fontError);
-                doc.setFont('helvetica');
-                doc.text('Quiz Report (Hindi font not loaded)', 10, 15);
-            }
+  } catch (error) {
+    console.error("Error generating quiz with AI:", error);
+    questions = [];
+    throw error;
+  }
+}
 
-            // स्कोर ऐड करें (उदाहरण, आपका रियल लॉजिक ऐड करें)
-            doc.setFontSize(12);
-            doc.text('स्कोर: 90/100', 10, 45);
-            doc.text('समाप्ति तिथि: ' + new Date().toLocaleDateString('hi-IN'), 10, 55);
+function showQuestion() {
+    resetState();
+    const currentQuestion = questions[currentQuestionIndex];
+    
+    questionElement.textContent = currentQuestion.question; 
+    questionCounter.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
+    progressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
 
-            // PDF सेव करें
-            doc.save('quiz-hindi-report.pdf');
-            statusEl.textContent = '✅ हिंदी PDF सफलतापूर्वक डाउनलोड हो गया!';
-            statusEl.style.color = 'green';
-            console.log('PDF generated with Hindi support');
-        } catch (error) {
-            showError('PDF जेनरेट करने में समस्या: ' + error.message);
-            console.error('PDF Error:', error);
+    const shuffledAnswers = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
+
+    shuffledAnswers.forEach(answer => {
+        const button = document.createElement('button');
+        button.innerHTML = `<span>${answer}</span>`;
+        button.classList.add('btn');
+        if (answer === currentQuestion.correct_answer) {
+            button.dataset.correct = true;
         }
+        button.addEventListener('click', selectAnswer);
+        answerButtonsElement.appendChild(button);
+    });
+
+    if (quizSettings.hintsEnabled) {
+        hintBtn.classList.remove('hidden');
+        hintBtn.disabled = false;
     }
 
-    // इवेंट लिस्टनर्स ऐड करें
-    if (startQuizBtn) {
-        startQuizBtn.addEventListener('click', startQuiz);  // क्विज़ स्टार्ट
-    }
-    if (nextButton) {
-        nextButton.addEventListener('click', handleNextButton);  // नेक्स्ट बटन
-    }
-    if (generateBtn) {
-        generateBtn.addEventListener('click', generateQuizPDF);  // PDF जेनरेट
+    startTimer();
+}
+
+function startTimer() {
+    timeLeft = quizSettings.timerDuration;
+    timerDisplay.textContent = `Time: ${timeLeft}`;
+    clearInterval(timer); 
+    timer = setInterval(() => {
+        timeLeft--;
+        timerDisplay.textContent = `Time: ${timeLeft}`;
+        if (timeLeft <= 0) {
+            clearInterval(timer);
+            handleTimeUp();
+        }
+    }, 1000);
+}
+
+function handleTimeUp() {
+    Array.from(answerButtonsElement.children).forEach(button => {
+        setStatusClass(button, button.dataset.correct);
+        button.disabled = true;
+    });
+    nextBtn.classList.remove('hidden');
+    hintBtn.classList.add('hidden');
+}
+
+function selectAnswer(e) {
+    clearInterval(timer);
+    const selectedButton = e.currentTarget;
+    const isCorrect = selectedButton.dataset.correct === 'true';
+
+    if (isCorrect) {
+        score++;
+        scoreCounter.textContent = `Score: ${score}`;
     }
 
-    // इनिशियल मैसेज
-    statusEl.textContent = '🚀 ऐप लोड हो गया। क्विज़ स्टार्ट करें!';
-    statusEl.style.color = 'blue';
-    console.log('Script.js loaded successfully - All functions defined');
-});
+    Array.from(answerButtonsElement.children).forEach(button => {
+        setStatusClass(button, button.dataset.correct);
+        button.disabled = true;
+    });
+
+    if (questions.length > currentQuestionIndex + 1) {
+        nextBtn.classList.remove('hidden');
+    } else {
+        setTimeout(showFinalScore, 1500); 
+    }
+    
+    hintBtn.classList.add('hidden');
+}
+
+function handleNextButton() {
+    currentQuestionIndex++;
+    showQuestion();
+}
+
+function showFinalScore() {
+    showScreen(scoreScreen);
+    const scorePercent = Math.round((score / questions.length) * 100);
+    finalScoreElement.textContent = `You scored ${score} out of ${questions.length} (${scorePercent}%)`;
+
+    let feedback = '';
+    if (scorePercent === 100) feedback = "Flawless Victory! You're an absolute genius! 🏆";
+    else if (scorePercent >= 75) feedback = "Excellent! You have a deep knowledge of this topic. 🎉";
+    else if (scorePercent >= 50) feedback = "Good job! A very respectable score. 👍";
+    else feedback = "Nice try! Every quiz is a learning opportunity. 💪";
+    scoreFeedbackElement.textContent = feedback;
+}
+
+function showHint() {
+    const incorrectButtons = Array.from(answerButtonsElement.children).filter(btn => !btn.dataset.correct);
+    if (incorrectButtons.length > 1) {
+        const buttonToDisable = incorrectButtons[Math.floor(Math.random() * incorrectButtons.length)];
+        buttonToDisable.style.visibility = 'hidden';
+        hintBtn.disabled = true;
+    }
+}
+
+function resetAndRestart() {
+    showScreen(startScreen);
+}
+
+function showError(message) {
+    errorMessage.textContent = `⚠️ Error: ${message}`;
+    errorMessage.classList.remove('hidden');
+}
+
+// --- Utility Functions ---
+function resetState() {
+    nextBtn.classList.add('hidden');
+    hintBtn.classList.add('hidden');
+    answerButtonsElement.innerHTML = '';
+}
+
+function setStatusClass(button, isCorrect) {
+    if (isCorrect) {
+        button.classList.add('correct');
+        button.innerHTML += ' <span>✓</span>';
+    } else {
+        button.classList.add('incorrect');
+        button.innerHTML += ' <span>✗</span>';
+    }
+}
